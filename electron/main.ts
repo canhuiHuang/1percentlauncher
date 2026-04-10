@@ -1,10 +1,10 @@
-import { app, BrowserWindow } from "electron";
+import { app, BrowserWindow, ipcMain, dialog } from "electron";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-import { ipcMain } from "electron";
 import { getDefaultMinecraftDir } from "./services/minecraftPaths";
 import { readProfiles } from "./services/profiles";
+import { readConfig, setMinecraftDir } from "./services/config";
 
 // const require = createRequire(import.meta.url);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -63,8 +63,30 @@ app.on("activate", () => {
 });
 
 app.whenReady().then(() => {
-  ipcMain.handle("mc:getDefaultDir", async () => {
+  ipcMain.handle("mc:getSavedMinecraftDir", async () => {
+    const config = await readConfig();
+
+    if (config.minecraftDir?.trim()) {
+      return config.minecraftDir;
+    }
+
     return getDefaultMinecraftDir();
+  });
+
+  ipcMain.handle("mc:pickMinecraftDir", async () => {
+    const result = await dialog.showOpenDialog({
+      title: "Select Minecraft installation folder",
+      properties: ["openDirectory"],
+    });
+
+    if (result.canceled || result.filePaths.length === 0) {
+      return null;
+    }
+
+    const selectedDir = result.filePaths[0];
+    await setMinecraftDir(selectedDir);
+
+    return selectedDir;
   });
 
   ipcMain.handle("mc:getProfiles", async (_e, mcDir: string) => {

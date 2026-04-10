@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from "electron";
+import { app, BrowserWindow, ipcMain, dialog } from "electron";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import os from "node:os";
@@ -38,6 +38,33 @@ async function readProfiles(mcDir) {
   if (vanillaProfiles.length > 0) return vanillaProfiles;
   return [];
 }
+function getConfigPath() {
+  return path.join(app.getPath("userData"), "config.json");
+}
+async function readConfig() {
+  const configPath = getConfigPath();
+  try {
+    const raw = await fs.readFile(configPath, "utf-8");
+    return JSON.parse(raw);
+  } catch {
+    return {};
+  }
+}
+async function writeConfig(config) {
+  const configPath = getConfigPath();
+  const dir = path.dirname(configPath);
+  await fs.mkdir(dir, { recursive: true });
+  await fs.writeFile(configPath, JSON.stringify(config, null, 2), "utf-8");
+}
+async function setMinecraftDir(minecraftDir) {
+  const current = await readConfig();
+  const next = {
+    ...current,
+    minecraftDir
+  };
+  await writeConfig(next);
+  return next;
+}
 const __dirname$1 = path.dirname(fileURLToPath(import.meta.url));
 process.env.APP_ROOT = path.join(__dirname$1, "..");
 const VITE_DEV_SERVER_URL = process.env["VITE_DEV_SERVER_URL"];
@@ -71,8 +98,25 @@ app.on("activate", () => {
   if (BrowserWindow.getAllWindows().length === 0) createWindow();
 });
 app.whenReady().then(() => {
-  ipcMain.handle("mc:getDefaultDir", async () => {
+  ipcMain.handle("mc:getSavedMinecraftDir", async () => {
+    var _a;
+    const config = await readConfig();
+    if ((_a = config.minecraftDir) == null ? void 0 : _a.trim()) {
+      return config.minecraftDir;
+    }
     return getDefaultMinecraftDir();
+  });
+  ipcMain.handle("mc:pickMinecraftDir", async () => {
+    const result = await dialog.showOpenDialog({
+      title: "Select Minecraft installation folder",
+      properties: ["openDirectory"]
+    });
+    if (result.canceled || result.filePaths.length === 0) {
+      return null;
+    }
+    const selectedDir = result.filePaths[0];
+    await setMinecraftDir(selectedDir);
+    return selectedDir;
   });
   ipcMain.handle("mc:getProfiles", async (_e, mcDir) => {
     return readProfiles(mcDir);

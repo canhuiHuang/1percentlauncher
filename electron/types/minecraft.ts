@@ -3,6 +3,10 @@ export type McProfile = {
   name: string;
   gameDir?: string;
   lastVersionId?: string;
+  lastUsed?: string;
+  icon?: string;
+  created?: string;
+  type?: string;
 };
 
 export type LauncherProfilesFile = {
@@ -18,4 +22,11 @@ export type LauncherProfilesFile = {
       type?: string;
     }
   >;
+};
+
+export type ForgeMatchResult = {
+  profile: McProfile | null;
+  requiredVersionId: string;
+  profileVersionId: string | null;
+  matches: boolean;
 };

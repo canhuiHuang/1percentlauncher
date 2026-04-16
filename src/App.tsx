@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import ForgeInstaller from "./components/ProgressBar";
 
 type McProfile = {
   id: string;
@@ -66,6 +67,8 @@ export default function App() {
           Load Profiles
         </button>
       </div>
+
+      <ForgeInstaller mcDir={dir} />
 
       {error ? <p style={{ color: "red" }}>{error}</p> : null}
 

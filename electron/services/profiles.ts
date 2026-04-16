@@ -2,9 +2,9 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import type { LauncherProfilesFile, McProfile } from "../types/minecraft";
 
-async function fileExists(filePath: string): Promise<boolean> {
+async function pathExists(targetPath: string): Promise<boolean> {
   try {
-    await fs.access(filePath);
+    await fs.access(targetPath);
     return true;
   } catch {
     return false;
@@ -16,29 +16,48 @@ async function readJsonFile<T>(filePath: string): Promise<T> {
   return JSON.parse(raw) as T;
 }
 
+function sortByLastUsedDesc(profiles: McProfile[]): McProfile[] {
+  return [...profiles].sort((a, b) => {
+    const aTime = a.lastUsed ? Date.parse(a.lastUsed) : 0;
+    const bTime = b.lastUsed ? Date.parse(b.lastUsed) : 0;
+    return bTime - aTime;
+  });
+}
+
 function mapVanillaProfiles(data: LauncherProfilesFile): McProfile[] {
-  return Object.entries(data.profiles ?? {}).map(([id, profile]) => ({
+  const profiles = Object.entries(data.profiles ?? {}).map(([id, profile]) => ({
     id,
     name: profile.name ?? id,
     gameDir: profile.gameDir,
     lastVersionId: profile.lastVersionId,
+    lastUsed: profile.lastUsed,
+    icon: profile.icon,
+    created: profile.created,
+    type: profile.type,
   }));
+
+  return sortByLastUsedDesc(profiles);
 }
 
-async function readVanillaStyleProfiles(mcDir: string): Promise<McProfile[]> {
+async function readVanillaLikeProfiles(mcDir: string): Promise<McProfile[]> {
   const launcherProfilesPath = path.join(mcDir, "launcher_profiles.json");
 
-  if (!(await fileExists(launcherProfilesPath))) return [];
+  if (!(await pathExists(launcherProfilesPath))) return [];
 
   const data = await readJsonFile<LauncherProfilesFile>(launcherProfilesPath);
   return mapVanillaProfiles(data);
 }
 
 export async function readProfiles(mcDir: string): Promise<McProfile[]> {
-  const vanillaProfiles = await readVanillaStyleProfiles(mcDir);
-
+  const vanillaProfiles = await readVanillaLikeProfiles(mcDir);
   if (vanillaProfiles.length > 0) return vanillaProfiles;
 
-  // TODO: Consider reading other launcher profiles
   return [];
+}
+
+export async function readLastPlayedProfile(
+  mcDir: string
+): Promise<McProfile | null> {
+  const profiles = await readProfiles(mcDir);
+  return profiles[0] ?? null;
 }

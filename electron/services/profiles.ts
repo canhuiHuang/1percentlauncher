@@ -55,6 +55,85 @@ export async function readProfiles(mcDir: string): Promise<McProfile[]> {
   return [];
 }
 
+function getLauncherProfilesPath(mcDir: string): string {
+  return path.join(mcDir, "launcher_profiles.json");
+}
+
+async function readLauncherProfilesFile(
+  mcDir: string
+): Promise<LauncherProfilesFile> {
+  const launcherProfilesPath = getLauncherProfilesPath(mcDir);
+
+  if (!(await pathExists(launcherProfilesPath))) {
+    return { profiles: {} };
+  }
+
+  return readJsonFile<LauncherProfilesFile>(launcherProfilesPath);
+}
+
+async function writeLauncherProfilesFile(
+  mcDir: string,
+  data: LauncherProfilesFile
+): Promise<void> {
+  const launcherProfilesPath = getLauncherProfilesPath(mcDir);
+  await fs.writeFile(
+    launcherProfilesPath,
+    JSON.stringify(data, null, 2),
+    "utf-8"
+  );
+}
+
+function makeProfileId(prefix = "forge"): string {
+  return `${prefix}-${Date.now()}`;
+}
+
+function nowIso(): string {
+  return new Date().toISOString();
+}
+
+export async function createProfileForVersion(
+  mcDir: string,
+  profileName: string,
+  versionId: string
+): Promise<string> {
+  const data = await readLauncherProfilesFile(mcDir);
+
+  if (!data.profiles) {
+    data.profiles = {};
+  }
+
+  const profileId = makeProfileId("forge");
+  const now = nowIso();
+
+  data.profiles[profileId] = {
+    name: profileName,
+    lastVersionId: versionId,
+    lastUsed: now,
+    created: now,
+    type: "custom",
+  };
+
+  await writeLauncherProfilesFile(mcDir, data);
+  return profileId;
+}
+
+export async function updateProfileVersion(
+  mcDir: string,
+  profileId: string,
+  versionId: string
+): Promise<void> {
+  const data = await readLauncherProfilesFile(mcDir);
+
+  if (!data.profiles || !data.profiles[profileId]) {
+    throw new Error(`Profile not found: ${profileId}`);
+  }
+
+  data.profiles[profileId].lastVersionId = versionId;
+  data.profiles[profileId].lastUsed = nowIso();
+
+  await writeLauncherProfilesFile(mcDir, data);
+}
+
 export async function readLastPlayedProfile(
   mcDir: string
 ): Promise<McProfile | null> {

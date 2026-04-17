@@ -1,18 +1,15 @@
 import { useEffect, useState } from "react";
 import ForgeInstaller from "./components/ProgressBar";
-
-type McProfile = {
-  id: string;
-  name: string;
-  gameDir?: string;
-  lastVersionId?: string;
-};
+import { McProfile } from "../electron/types/minecraft";
 
 export default function App() {
   const [dir, setDir] = useState("");
   const [profiles, setProfiles] = useState<McProfile[]>([]);
+  const [selectedProfileId, setSelectedProfileId] = useState<string>("");
   const [error, setError] = useState("");
+  const [isInstalling, setIsInstalling] = useState(false);
 
+  // Load Minecraft Directory
   useEffect(() => {
     async function loadInitialDir() {
       try {
@@ -26,14 +23,31 @@ export default function App() {
     void loadInitialDir();
   }, []);
 
+  // Load Profiles
+  useEffect(() => {
+    if (!dir) return;
+
+    async function loadProfiles() {
+      try {
+        const profilesRes = await window.mc.getProfiles(dir);
+        setProfiles(profilesRes);
+
+        if (profilesRes.length > 0) setSelectedProfileId(profilesRes[0].id);
+      } catch {
+        setError("Failed to load profiles.");
+        setProfiles([]);
+      }
+    }
+
+    loadProfiles();
+  }, [dir]);
+
   async function chooseFolder() {
     try {
       setError("");
       const selectedDir = await window.mc.pickMinecraftDir();
 
-      if (!selectedDir) {
-        return;
-      }
+      if (!selectedDir) return;
 
       setDir(selectedDir);
       setProfiles([]);
@@ -42,14 +56,28 @@ export default function App() {
     }
   }
 
-  async function loadProfiles() {
+  async function reloadProfiles(): Promise<McProfile[]> {
     try {
-      setError("");
-      const nextProfiles = await window.mc.getProfiles(dir);
-      setProfiles(nextProfiles);
-    } catch {
-      setError("Failed to load profiles from this directory.");
+      const profilesRes = await window.mc.getProfiles(dir);
+
+      setProfiles(profilesRes);
+
+      setSelectedProfileId((prev) => {
+        // keep current selection if it still exists
+        if (prev && profilesRes.some((p) => p.id === prev)) {
+          return prev;
+        }
+
+        // otherwise default to most recently used
+        return profilesRes[0]?.id ?? "";
+      });
+
+      return profilesRes;
+    } catch (err) {
+      setError("Failed to reload profiles.");
       setProfiles([]);
+      setSelectedProfileId("");
+      return [];
     }
   }
 
@@ -63,23 +91,21 @@ export default function App() {
 
       <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
         <button onClick={chooseFolder}>Choose Minecraft Folder</button>
-        <button onClick={loadProfiles} disabled={!dir}>
-          Load Profiles
-        </button>
       </div>
 
-      <ForgeInstaller mcDir={dir} />
+      <ForgeInstaller
+        mcDir={dir}
+        profiles={profiles}
+        selectedProfileId={selectedProfileId}
+        setSelectedProfileId={setSelectedProfileId}
+        error={error}
+        setError={setError}
+        isInstalling={isInstalling}
+        setIsInstalling={setIsInstalling}
+        reloadProfiles={reloadProfiles}
+      />
 
       {error ? <p style={{ color: "red" }}>{error}</p> : null}
-
-      <ul>
-        {profiles.map((profile) => (
-          <li key={profile.id}>
-            {profile.name}
-            {profile.lastVersionId ? ` (${profile.lastVersionId})` : ""}
-          </li>
-        ))}
-      </ul>
     </div>
   );
 }

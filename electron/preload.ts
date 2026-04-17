@@ -4,8 +4,12 @@ contextBridge.exposeInMainWorld("mc", {
   getSavedMinecraftDir: () => ipcRenderer.invoke("mc:getSavedMinecraftDir"),
   pickMinecraftDir: () => ipcRenderer.invoke("mc:pickMinecraftDir"),
   getProfiles: (dir: string) => ipcRenderer.invoke("mc:getProfiles", dir),
-  installForgeFromDropbox: (dir: string) =>
-    ipcRenderer.invoke("mc:installForgeFromDropbox", dir),
+  installForgeClean: (dir: string) =>
+    ipcRenderer.invoke("mc:installForgeClean", dir),
+  installForgeIntoProfile: (dir: string, profileId: string) =>
+    ipcRenderer.invoke("mc:installForgeIntoProfile", dir, profileId),
+
+  // Independent forge
   onForgeInstallProgress: (
     callback: (payload: {
       stage: "searching" | "downloading" | "installing" | "done" | "error";

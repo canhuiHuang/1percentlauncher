@@ -5,6 +5,15 @@ type McProfile = {
   name: string;
   gameDir?: string;
   lastVersionId?: string;
+  lastUsed?: string;
+};
+
+type ForgeInstallResult = {
+  success: boolean;
+  profileId: string;
+  forgeVersionId: string;
+  fileName: string;
+  localJarPath: string;
 };
 
 type ForgeInstallProgress = {
@@ -19,11 +28,12 @@ declare global {
       getSavedMinecraftDir: () => Promise<string>;
       pickMinecraftDir: () => Promise<string | null>;
       getProfiles: (dir: string) => Promise<McProfile[]>;
-      installForgeFromDropbox: (dir: string) => Promise<{
-        success: boolean;
-        fileName: string;
-        localJarPath: string;
-      }>;
+      installForgeClean: (dir: string) => Promise<ForgeInstallResult>;
+      installForgeIntoProfile: (
+        dir: string,
+        profileId: string
+      ) => Promise<void>;
+
       onForgeInstallProgress: (
         callback: (payload: ForgeInstallProgress) => void
       ) => () => void;

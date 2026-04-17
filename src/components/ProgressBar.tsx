@@ -1,19 +1,47 @@
 import { useEffect, useState } from "react";
 
+type McProfile = {
+  id: string;
+  name: string;
+  gameDir?: string;
+  lastVersionId?: string;
+  lastUsed?: string;
+};
+
 type ForgeInstallProgress = {
   stage: "searching" | "downloading" | "installing" | "done" | "error";
   percent: number;
   message: string;
 };
 
-export default function ForgeInstaller({ mcDir }: { mcDir: string }) {
+type ForgeInstallerProps = {
+  mcDir: string;
+  profiles: McProfile[];
+  selectedProfileId: string;
+  setSelectedProfileId: React.Dispatch<React.SetStateAction<string>>;
+  error: string;
+  setError: React.Dispatch<React.SetStateAction<string>>;
+  isInstalling: boolean;
+  setIsInstalling: React.Dispatch<React.SetStateAction<boolean>>;
+  reloadProfiles: () => Promise<McProfile[]>;
+};
+
+export default function ForgeInstaller({
+  mcDir,
+  profiles,
+  selectedProfileId,
+  setSelectedProfileId,
+  error,
+  setError,
+  isInstalling,
+  setIsInstalling,
+  reloadProfiles,
+}: ForgeInstallerProps) {
   const [progress, setProgress] = useState<ForgeInstallProgress>({
     stage: "searching",
     percent: 0,
     message: "",
   });
-  const [isInstalling, setIsInstalling] = useState(false);
-  const [error, setError] = useState("");
 
   useEffect(() => {
     const unsubscribe = window.mc.onForgeInstallProgress((payload) => {
@@ -23,7 +51,7 @@ export default function ForgeInstaller({ mcDir }: { mcDir: string }) {
     return unsubscribe;
   }, []);
 
-  async function handleInstallForge() {
+  async function handleCleanInstall() {
     try {
       setError("");
       setIsInstalling(true);
@@ -33,7 +61,44 @@ export default function ForgeInstaller({ mcDir }: { mcDir: string }) {
         message: "Starting...",
       });
 
-      await window.mc.installForgeFromDropbox(mcDir);
+      const result = await window.mc.installForgeClean(mcDir);
+      const updatedProfiles = await reloadProfiles();
+      const createdProfileStillExists = updatedProfiles.some(
+        (profile) => profile.id === result.profileId
+      );
+
+      if (createdProfileStillExists) {
+        setSelectedProfileId(result.profileId);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to install Forge.");
+      setProgress({
+        stage: "error",
+        percent: 0,
+        message: "Forge installation failed.",
+      });
+    } finally {
+      setIsInstalling(false);
+    }
+  }
+
+  async function handleInstallInSelectedProfile() {
+    try {
+      if (!selectedProfileId) {
+        setError("No profile selected.");
+        return;
+      }
+
+      setError("");
+      setIsInstalling(true);
+      setProgress({
+        stage: "searching",
+        percent: 0,
+        message: "Starting...",
+      });
+
+      await window.mc.installForgeIntoProfile(mcDir, selectedProfileId);
+      await reloadProfiles();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to install Forge.");
       setProgress({
@@ -48,9 +113,32 @@ export default function ForgeInstaller({ mcDir }: { mcDir: string }) {
 
   return (
     <div style={{ maxWidth: 420 }}>
-      <button onClick={handleInstallForge} disabled={isInstalling || !mcDir}>
-        {isInstalling ? "Installing Forge..." : "Install Forge"}
-      </button>
+      <select
+        value={selectedProfileId}
+        onChange={(e) => setSelectedProfileId(e.target.value)}
+        disabled={isInstalling || profiles.length === 0}
+        style={{ width: "100%", marginBottom: 12 }}
+      >
+        {profiles.map((profile) => (
+          <option key={profile.id} value={profile.id}>
+            {profile.name}
+            {profile.lastVersionId ? ` (${profile.lastVersionId})` : ""}
+          </option>
+        ))}
+      </select>
+
+      <div style={{ display: "flex", gap: 8 }}>
+        <button onClick={handleCleanInstall} disabled={isInstalling || !mcDir}>
+          {isInstalling ? "Installing Forge..." : "Clean Installation"}
+        </button>
+
+        <button
+          onClick={handleInstallInSelectedProfile}
+          disabled={isInstalling || !mcDir || !selectedProfileId}
+        >
+          Install in selected profile
+        </button>
+      </div>
 
       <div
         style={{

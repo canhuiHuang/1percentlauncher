@@ -7,7 +7,11 @@ import { createWriteStream } from "node:fs";
 import { pipeline } from "node:stream/promises";
 import { spawn } from "node:child_process";
 import { getDefaultMinecraftDir } from "./services/minecraftPaths";
-import { readProfiles } from "./services/profiles";
+import {
+  readProfiles,
+  createProfileForVersion,
+  updateProfileVersion,
+} from "./services/profiles";
 import { readConfig, setMinecraftDir } from "./services/config";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -72,6 +76,11 @@ async function listDropboxFolder(token: string, folderPath: string) {
       [key: string]: unknown;
     }>;
   };
+}
+
+function getForgeVersionIdFromInstallerFileName(fileName: string) {
+  // forge-1.20.1-47.4.10-installer.jar -> forge-1.20.1-47.4.10
+  return fileName.replace(/-installer\.jar$/i, "");
 }
 
 async function downloadDropboxFileWithProgress(
@@ -203,52 +212,98 @@ app.whenReady().then(() => {
     return readProfiles(mcDir);
   });
 
-  ipcMain.handle("mc:installForgeFromDropbox", async (_e, mcDir: string) => {
-    const token = process.env.ACCESS_TOKEN;
-    if (!token) {
-      throw new Error("Missing ACCESS_TOKEN");
+  async function getForgeInfoFromBackend() {
+    const res = await fetch("http://localhost:4032/files/forge");
+
+    if (!res.ok) {
+      throw new Error(
+        `Backend forge lookup failed: ${res.status} ${await res.text()}`
+      );
     }
 
+    const data = await res.json();
+
+    if (!data?.ok || !data?.fileName) {
+      throw new Error("Backend did not return a valid forge file.");
+    }
+
+    return data as {
+      ok: true;
+      fileName: string;
+      downloadUrl?: string;
+    };
+  }
+
+  async function downloadFileWithProgress(
+    url: string,
+    outputPath: string,
+    onProgress: (percent: number) => void
+  ) {
+    const res = await fetch(url);
+
+    if (!res.ok || !res.body) {
+      throw new Error(
+        `File download failed: ${res.status} ${await res.text()}`
+      );
+    }
+
+    const total = Number(res.headers.get("content-length") ?? 0);
+    const reader = res.body.getReader();
+    const fileStream = createWriteStream(outputPath);
+
+    let downloaded = 0;
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+
+        if (done) break;
+        if (!value) continue;
+
+        downloaded += value.length;
+        fileStream.write(Buffer.from(value));
+
+        if (total > 0) {
+          const percent = Math.round((downloaded / total) * 100);
+          onProgress(percent);
+        }
+      }
+    } finally {
+      fileStream.end();
+      reader.releaseLock();
+    }
+  }
+
+  async function installForgeFromBackend(mcDir: string) {
     sendForgeProgress({
       stage: "searching",
       percent: 5,
       message: "Searching for Forge installer...",
     });
 
-    const folder = await listDropboxFolder(token, "/server mods aug2023");
-
-    const forgeFile = folder.entries.find((entry) => {
-      const name = entry.name.toLowerCase();
-      return /^forge-.*-installer\.jar$/.test(name);
-    });
-
-    if (!forgeFile?.path_lower) {
-      throw new Error("Could not find a file matching forge-*-installer.jar");
-    }
+    const forgeInfo = await getForgeInfoFromBackend();
 
     const downloadsDir = path.join(app.getPath("userData"), "downloads");
     await fs.mkdir(downloadsDir, { recursive: true });
 
-    const localJarPath = path.join(downloadsDir, forgeFile.name);
+    const localJarPath = path.join(downloadsDir, forgeInfo.fileName);
 
     sendForgeProgress({
       stage: "downloading",
       percent: 10,
-      message: `Downloading ${forgeFile.name}...`,
+      message: `Downloading ${forgeInfo.fileName}...`,
     });
 
-    await downloadDropboxFileWithProgress(
-      token,
-      forgeFile.path_lower,
-      localJarPath,
-      (percent) => {
-        sendForgeProgress({
-          stage: "downloading",
-          percent,
-          message: `Downloading Forge... ${percent}%`,
-        });
-      }
-    );
+    const downloadUrl =
+      forgeInfo.downloadUrl ?? "http://localhost:4032/files/forge/download";
+
+    await downloadFileWithProgress(downloadUrl, localJarPath, (percent) => {
+      sendForgeProgress({
+        stage: "downloading",
+        percent,
+        message: `Downloading Forge... ${percent}%`,
+      });
+    });
 
     sendForgeProgress({
       stage: "installing",
@@ -258,18 +313,63 @@ app.whenReady().then(() => {
 
     await runForgeInstaller(localJarPath, mcDir);
 
+    const forgeVersionId = getForgeVersionIdFromInstallerFileName(
+      forgeInfo.fileName
+    );
+
+    return {
+      forgeVersionId,
+      fileName: forgeInfo.fileName,
+      localJarPath,
+    };
+  }
+
+  ipcMain.handle("mc:installForgeClean", async (_e, mcDir: string) => {
+    const result = await installForgeFromBackend(mcDir);
+
+    const profileId = await createProfileForVersion(
+      mcDir,
+      `Forge ${result.forgeVersionId.replace(/^forge-/, "")}`,
+      result.forgeVersionId
+    );
+
     sendForgeProgress({
       stage: "done",
       percent: 100,
-      message: "Forge installed successfully.",
+      message: "Forge installed successfully in a new profile.",
     });
 
     return {
       success: true,
-      fileName: forgeFile.name,
-      localJarPath,
+      profileId,
+      forgeVersionId: result.forgeVersionId,
+      fileName: result.fileName,
+      localJarPath: result.localJarPath,
     };
   });
+
+  ipcMain.handle(
+    "mc:installForgeIntoProfile",
+    async (_e, mcDir: string, profileId: string) => {
+      const result = await installForgeFromBackend(mcDir);
+
+      await updateProfileVersion(mcDir, profileId, result.forgeVersionId);
+
+      sendForgeProgress({
+        stage: "done",
+        percent: 100,
+        message: "Forge installed successfully in selected profile.",
+      });
+
+      return {
+        success: true,
+        profileId,
+        forgeVersionId: result.forgeVersionId,
+        fileName: result.fileName,
+        localJarPath: result.localJarPath,
+      };
+    }
+  );
 
   createWindow();
 });

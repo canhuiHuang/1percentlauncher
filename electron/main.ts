@@ -1,4 +1,3 @@
-import "dotenv/config";
 import { app, BrowserWindow, ipcMain, dialog, shell } from "electron";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
@@ -7,6 +6,7 @@ import fs from "node:fs/promises";
 import { createWriteStream } from "node:fs";
 import { spawn } from "node:child_process";
 import { gunzipSync, gzipSync } from "node:zlib";
+import dotenv from "dotenv";
 import { getDefaultMinecraftDir } from "./services/minecraftPaths";
 import {
   readProfiles,
@@ -23,6 +23,11 @@ import {
 } from "./services/config";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const runtimeEnvPath = app.isPackaged
+  ? path.join(path.dirname(process.execPath), ".env")
+  : path.resolve(process.cwd(), ".env");
+
+dotenv.config({ path: runtimeEnvPath });
 
 process.env.APP_ROOT = path.join(__dirname, "..");
 
@@ -37,7 +42,6 @@ process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL
 let win: BrowserWindow | null;
 
 const BACKEND_BASE_URL = process.env.BASE;
-
 type InstallForgeProgress =
   | { stage: "searching"; percent: number; message: string }
   | { stage: "downloading"; percent: number; message: string }

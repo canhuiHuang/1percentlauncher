@@ -5,6 +5,7 @@ const version = process.env.npm_package_version ?? "0.0.0";
 const releaseRoot = path.resolve("release", version);
 const unpackedDir = path.join(releaseRoot, "win-unpacked");
 const targetDir = path.join(releaseRoot, "1PercentLauncher");
+const envSource = path.resolve(".env");
 
 async function pathExists(targetPath) {
   try {
@@ -26,3 +27,7 @@ if (await pathExists(targetDir)) {
 await fs.cp(unpackedDir, targetDir, { recursive: true });
 await fs.mkdir(path.join(targetDir, "downloads"), { recursive: true });
 await fs.mkdir(path.join(targetDir, "temp"), { recursive: true });
+
+if (await pathExists(envSource)) {
+  await fs.copyFile(envSource, path.join(targetDir, ".env"));
+}

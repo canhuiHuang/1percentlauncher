@@ -259,6 +259,21 @@ function createWindow() {
     win.loadFile(path.join(RENDERER_DIST, "index.html"));
   }
 
+  win.webContents.on(
+    "did-fail-load",
+    (_event, errorCode, errorDescription, validatedURL) => {
+      console.error("Renderer failed to load:", {
+        errorCode,
+        errorDescription,
+        validatedURL,
+      });
+    }
+  );
+
+  win.webContents.on("render-process-gone", (_event, details) => {
+    console.error("Renderer process crashed:", details);
+  });
+
   win.webContents.once("did-finish-load", () => {
     win?.webContents.send("app:update-state", appUpdateState);
   });

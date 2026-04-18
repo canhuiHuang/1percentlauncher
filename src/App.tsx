@@ -118,6 +118,7 @@ function getModTags(name: string): ModTag[] {
 }
 
 export default function App() {
+  const mc = window.mc;
   const [dir, setDir] = useState("");
   const [profiles, setProfiles] = useState<McProfile[]>([]);
   const [selectedProfileId, setSelectedProfileId] = useState<string>("");
@@ -166,14 +167,23 @@ export default function App() {
   }, [selectedProfile?.id, selectedProfile?.javaArgs, systemMemoryMb]);
 
   useEffect(() => {
+    if (!mc) {
+      return;
+    }
+
     const unsubscribe = window.mc.onForgeInstallProgress((payload) => {
       setProgress(payload);
     });
 
     return unsubscribe;
-  }, []);
+  }, [mc]);
 
   useEffect(() => {
+    if (!mc) {
+      setError("Electron bridge is unavailable.");
+      return;
+    }
+
     function handleAppUpdateState(payload: {
       status:
         | "idle"
@@ -197,7 +207,7 @@ export default function App() {
         );
 
         if (shouldUpdate) {
-          void window.mc.downloadAppUpdate();
+          void mc.downloadAppUpdate();
         }
       }
 
@@ -212,17 +222,17 @@ export default function App() {
         );
 
         if (shouldInstall) {
-          void window.mc.installDownloadedUpdate();
+          void mc.installDownloadedUpdate();
         }
       }
     }
 
-    void window.mc.getAppUpdateState().then(handleAppUpdateState);
+    void mc.getAppUpdateState().then(handleAppUpdateState);
 
-    const unsubscribe = window.mc.onAppUpdateState(handleAppUpdateState);
+    const unsubscribe = mc.onAppUpdateState(handleAppUpdateState);
 
     return unsubscribe;
-  }, []);
+  }, [mc]);
 
   const versionMatches =
     !!selectedProfile?.lastVersionId &&
@@ -335,12 +345,17 @@ export default function App() {
   );
 
   useEffect(() => {
+    if (!mc) {
+      setError("Electron bridge is unavailable.");
+      return;
+    }
+
     async function loadInitialDir() {
       try {
         const [dirStatus, totalMemoryMb, config] = await Promise.all([
-          window.mc.getMinecraftDirStatus(),
-          window.mc.getSystemMemoryMb(),
-          window.mc.getAppConfig(),
+          mc.getMinecraftDirStatus(),
+          mc.getSystemMemoryMb(),
+          mc.getAppConfig(),
         ]);
         setDir(dirStatus.minecraftDir);
         setSystemMemoryMb(totalMemoryMb);
@@ -354,9 +369,13 @@ export default function App() {
     }
 
     void loadInitialDir();
-  }, []);
+  }, [mc]);
 
   useEffect(() => {
+    if (!mc) {
+      return;
+    }
+
     let isActive = true;
 
     async function loadServerInfo() {
@@ -365,8 +384,8 @@ export default function App() {
         setIsLoadingServerMods(true);
 
         const [forgeInfo, mods] = await Promise.all([
-          window.mc.getRequiredForgeInfo(),
-          window.mc.getServerMods(),
+          mc.getRequiredForgeInfo(),
+          mc.getServerMods(),
         ]);
 
         if (!isActive) return;
@@ -391,14 +410,14 @@ export default function App() {
     return () => {
       isActive = false;
     };
-  }, []);
+  }, [mc]);
 
   useEffect(() => {
-    if (!dir) return;
+    if (!mc || !dir) return;
 
     async function loadProfiles() {
       try {
-        const profilesRes = await window.mc.getProfiles(dir);
+        const profilesRes = await mc.getProfiles(dir);
         setProfiles(profilesRes);
 
         if (profilesRes.length > 0) {
@@ -414,10 +433,10 @@ export default function App() {
     }
 
     void loadProfiles();
-  }, [dir]);
+  }, [dir, mc]);
 
   useEffect(() => {
-    if (!dir || !selectedProfileId) {
+    if (!mc || !dir || !selectedProfileId) {
       setInstalledMods([]);
       setIsLoadingInstalledMods(false);
       return;
@@ -428,7 +447,7 @@ export default function App() {
     async function loadInstalledMods() {
       try {
         setIsLoadingInstalledMods(true);
-        const mods = await window.mc.getInstalledMods(dir, selectedProfileId);
+        const mods = await mc.getInstalledMods(dir, selectedProfileId);
 
         if (!isActive) return;
 
@@ -449,10 +468,10 @@ export default function App() {
     return () => {
       isActive = false;
     };
-  }, [dir, selectedProfileId]);
+  }, [dir, selectedProfileId, mc]);
 
   useEffect(() => {
-    if (!dir || !selectedProfileId) {
+    if (!mc || !dir || !selectedProfileId) {
       setProfileHasServerIp(false);
       setIsLoadingProfileServerIp(false);
       return;
@@ -463,10 +482,7 @@ export default function App() {
     async function loadProfileServerIpStatus() {
       try {
         setIsLoadingProfileServerIp(true);
-        const hasServerIp = await window.mc.profileHasServerIp(
-          dir,
-          selectedProfileId
-        );
+        const hasServerIp = await mc.profileHasServerIp(dir, selectedProfileId);
 
         if (!isActive) return;
 
@@ -487,7 +503,7 @@ export default function App() {
     return () => {
       isActive = false;
     };
-  }, [dir, selectedProfileId]);
+  }, [dir, selectedProfileId, mc]);
 
   async function chooseFolder() {
     try {

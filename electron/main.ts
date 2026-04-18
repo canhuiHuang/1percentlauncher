@@ -105,30 +105,6 @@ function createWindow() {
   }
 }
 
-async function listDropboxFolder(token: string, folderPath: string) {
-  const res = await fetch("https://api.dropboxapi.com/2/files/list_folder", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      path: folderPath,
-    }),
-  });
-
-  if (!res.ok)
-    throw new Error(`Dropbox list failed: ${res.status} ${await res.text()}`);
-
-  return (await res.json()) as {
-    entries: Array<{
-      name: string;
-      path_lower?: string;
-      [key: string]: unknown;
-    }>;
-  };
-}
-
 function getForgeVersionIdFromInstallerFileName(fileName: string) {
   // forge-1.20.1-47.4.10-installer.jar -> 1.20.1-forge-47.4.10
   const normalized = fileName.replace(/-installer\.jar$/i, "");
@@ -442,53 +418,6 @@ async function profileHasServerIp(mcDir: string, profileId: string) {
         entry.value.ip.value.trim().toLowerCase() === serverIp.toLowerCase()
     )
   );
-}
-
-async function downloadDropboxFileWithProgress(
-  token: string,
-  dropboxPath: string,
-  outputPath: string,
-  onProgress: (percent: number) => void
-) {
-  const res = await fetch("https://content.dropboxapi.com/2/files/download", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Dropbox-API-Arg": JSON.stringify({ path: dropboxPath }),
-    },
-  });
-
-  if (!res.ok || !res.body) {
-    throw new Error(
-      `Dropbox download failed: ${res.status} ${await res.text()}`
-    );
-  }
-
-  const total = Number(res.headers.get("content-length") ?? 0);
-  const reader = res.body.getReader();
-  const fileStream = createWriteStream(outputPath);
-
-  let downloaded = 0;
-
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-
-      if (done) break;
-      if (!value) continue;
-
-      downloaded += value.length;
-      fileStream.write(Buffer.from(value));
-
-      if (total > 0) {
-        const percent = Math.round((downloaded / total) * 100);
-        onProgress(percent);
-      }
-    }
-  } finally {
-    fileStream.end();
-    reader.releaseLock();
-  }
 }
 
 async function runForgeInstaller(jarPath: string, minecraftDir: string) {

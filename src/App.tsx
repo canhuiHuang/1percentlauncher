@@ -25,6 +25,14 @@ function formatForgeVersion(versionId: string): string {
   return versionId.replace(/^forge-/, "Forge ");
 }
 
+function getMatchStatusIcon(matches: boolean) {
+  return (
+    <span className={`status-icon ${matches ? "status-ok" : "status-bad"}`}>
+      {matches ? "✅" : "❌"}
+    </span>
+  );
+}
+
 function getModTags(name: string): ModTag[] {
   const normalizedName = normalizeModName(name);
 
@@ -414,13 +422,7 @@ export default function App() {
               {selectedProfile?.lastVersionId ? (
                 <span>
                   {selectedProfile.lastVersionId}
-                  <span
-                    className={`status-icon ${
-                      versionMatches ? "status-ok" : "status-bad"
-                    }`}
-                  >
-                    {versionMatches ? "✅" : "❌"}
-                  </span>
+                  {getMatchStatusIcon(versionMatches)}
                 </span>
               ) : (
                 <span>Unavailable</span>
@@ -432,35 +434,18 @@ export default function App() {
                 <div className="field-label mr-2">Required Mods Installed:</div>
                 <span>
                   {installedRequiredModsCount} / {requiredServerModsCount}{" "}
-                  <span
-                    className={`status-icon ${
-                      installedRequiredModsCount === requiredServerModsCount
-                        ? "status-ok"
-                        : "status-bad"
-                    }`}
-                  >
-                    {" "}
-                    {installedRequiredModsCount === requiredServerModsCount
-                      ? "✅"
-                      : "❌"}
-                  </span>
+                  {getMatchStatusIcon(
+                    installedRequiredModsCount === requiredServerModsCount
+                  )}
                 </span>
               </div>
               <div className="flex ac">
                 <div className="field-label mr-2">Optional Mods Installed:</div>
                 <span>
                   {installedOptionalModsCount} / {optionalServerModsCount}{" "}
-                  <span
-                    className={`status-icon ${
-                      installedOptionalModsCount === optionalServerModsCount
-                        ? "status-ok"
-                        : "status-bad"
-                    }`}
-                  >
-                    {installedOptionalModsCount === optionalServerModsCount
-                      ? "✅"
-                      : "❌"}
-                  </span>
+                  {getMatchStatusIcon(
+                    installedOptionalModsCount === optionalServerModsCount
+                  )}
                 </span>
               </div>
             </div>

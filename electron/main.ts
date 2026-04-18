@@ -1086,15 +1086,6 @@ app.whenReady().then(() => {
   );
 
   async function runCleanInstall(mcDir: string, gameDir?: string) {
-    const cancelledResult = {
-      success: false,
-      cancelled: true,
-      profileId: "",
-      forgeVersionId: "",
-      fileName: "",
-      localJarPath: "",
-    };
-
     const result = await installForgeFromBackend(mcDir);
 
     const profileId = await createProfileForVersion(

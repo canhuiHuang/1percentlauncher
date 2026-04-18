@@ -19,8 +19,6 @@ export default function ForgeInstaller({ progress }: ForgeInstallerProps) {
           style={{ width: `${progress.percent}%` }}
         />
       </div>
-
-      <div className="forge-progress-message">{progress.message || ""}</div>
     </div>
   );
 }

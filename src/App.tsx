@@ -930,8 +930,8 @@ export default function App() {
           <section className="panel server-panel">
             <h2 className="panel-title">
               {isServerInfoUnavailable
-                ? "Server Info (Unable to reach server)"
-                : "Server Info"}
+                ? "🌐 Server Info (Unable to reach server)"
+                : "🌐 Server Info"}
             </h2>
             <div className="flex">
               <strong className="field-label">Version: </strong>

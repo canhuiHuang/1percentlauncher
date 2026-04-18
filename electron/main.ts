@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { app, BrowserWindow, ipcMain, dialog } from "electron";
+import { app, BrowserWindow, ipcMain, dialog, shell } from "electron";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import fs from "node:fs/promises";
@@ -47,6 +47,12 @@ type ServerModInfo = {
   size: number;
   clientModified: string;
   serverModified: string;
+  downloadUrl?: string;
+};
+
+type ModDownloadInfo = {
+  name: string;
+  link: string;
 };
 
 type InstalledModInfo = {
@@ -111,6 +117,37 @@ async function pathExists(targetPath: string) {
     return false;
   }
 }
+
+async function ensureDir(targetPath: string) {
+  await fs.mkdir(targetPath, { recursive: true });
+}
+
+function getDownloadsDir() {
+  return path.join(app.getPath("userData"), "downloads");
+}
+
+async function getProfileById(mcDir: string, profileId: string) {
+  const profiles = await readProfiles(mcDir);
+  const profile = profiles.find((entry) => entry.id === profileId);
+
+  if (!profile) {
+    throw new Error(`Profile not found: ${profileId}`);
+  }
+
+  return profile;
+}
+
+  async function getProfileModsDir(mcDir: string, profileId: string) {
+    const profile = await getProfileById(mcDir, profileId);
+    const profileDir = profile.gameDir?.trim() || mcDir;
+
+    return path.join(profileDir, "mods");
+  }
+
+  async function getProfileDir(mcDir: string, profileId: string) {
+    const profile = await getProfileById(mcDir, profileId);
+    return profile.gameDir?.trim() || mcDir;
+  }
 
 async function downloadDropboxFileWithProgress(
   token: string,
@@ -241,6 +278,11 @@ app.whenReady().then(() => {
     return readProfiles(mcDir);
   });
 
+  ipcMain.handle("mc:openProfileFolder", async (_e, mcDir: string, profileId: string) => {
+    const profileDir = await getProfileDir(mcDir, profileId);
+    await shell.openPath(profileDir);
+  });
+
   ipcMain.handle(
     "mc:updateProfileName",
     async (_e, mcDir: string, profileId: string, profileName: string) => {
@@ -304,15 +346,7 @@ app.whenReady().then(() => {
     mcDir: string,
     profileId: string
   ): Promise<InstalledModInfo[]> {
-    const profiles = await readProfiles(mcDir);
-    const profile = profiles.find((entry) => entry.id === profileId);
-
-    if (!profile) {
-      throw new Error(`Profile not found: ${profileId}`);
-    }
-
-    const profileDir = profile.gameDir?.trim() || mcDir;
-    const modsDir = path.join(profileDir, "mods");
+    const modsDir = await getProfileModsDir(mcDir, profileId);
 
     if (!(await pathExists(modsDir))) {
       return [];
@@ -386,27 +420,35 @@ app.whenReady().then(() => {
 
     const forgeInfo = await getRequiredForgeInfo();
 
-    const downloadsDir = path.join(app.getPath("userData"), "downloads");
-    await fs.mkdir(downloadsDir, { recursive: true });
+    const downloadsDir = getDownloadsDir();
+    await ensureDir(downloadsDir);
 
     const localJarPath = path.join(downloadsDir, forgeInfo.fileName);
 
-    sendForgeProgress({
-      stage: "downloading",
-      percent: 10,
-      message: `Downloading ${forgeInfo.fileName}...`,
-    });
-
-    const downloadUrl =
-      forgeInfo.downloadUrl ?? "http://localhost:4032/files/forge/download";
-
-    await downloadFileWithProgress(downloadUrl, localJarPath, (percent) => {
+    if (!(await pathExists(localJarPath))) {
       sendForgeProgress({
         stage: "downloading",
-        percent,
-        message: `Downloading Forge... ${percent}%`,
+        percent: 10,
+        message: `Downloading ${forgeInfo.fileName}...`,
       });
-    });
+
+      const downloadUrl =
+        forgeInfo.downloadUrl ?? "http://localhost:4032/files/forge/download";
+
+      await downloadFileWithProgress(downloadUrl, localJarPath, (percent) => {
+        sendForgeProgress({
+          stage: "downloading",
+          percent,
+          message: `Downloading Forge... ${percent}%`,
+        });
+      });
+    } else {
+      sendForgeProgress({
+        stage: "downloading",
+        percent: 100,
+        message: `Using cached ${forgeInfo.fileName}.`,
+      });
+    }
 
     sendForgeProgress({
       stage: "installing",
@@ -421,6 +463,152 @@ app.whenReady().then(() => {
       fileName: forgeInfo.fileName,
       localJarPath,
     };
+  }
+
+  async function getCachedModSource(fileName: string) {
+    const downloadsDir = getDownloadsDir();
+    const cachedPath = path.join(downloadsDir, fileName);
+
+    if (await pathExists(cachedPath)) {
+      return cachedPath;
+    }
+
+    return null;
+  }
+
+  async function getModDownloadsFromBackend(
+    modNames: string[]
+  ): Promise<ModDownloadInfo[]> {
+    const res = await fetch("http://localhost:4032/files/mods/download", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ modNames }),
+    });
+
+    if (!res.ok) {
+      throw new Error(
+        `Backend mod download lookup failed: ${res.status} ${await res.text()}`
+      );
+    }
+
+    const data = await res.json();
+
+    if (!data?.ok || !Array.isArray(data?.downloads)) {
+      throw new Error("Backend did not return valid mod download links.");
+    }
+
+    return data.downloads as ModDownloadInfo[];
+  }
+
+  async function downloadModsToCache(downloads: ModDownloadInfo[]) {
+    const downloadsDir = getDownloadsDir();
+    await ensureDir(downloadsDir);
+
+    for (let index = 0; index < downloads.length; index += 1) {
+      const download = downloads[index];
+      const targetPath = path.join(downloadsDir, download.name);
+
+      await downloadFileWithProgress(download.link, targetPath, (percent) => {
+        sendForgeProgress({
+          stage: "downloading",
+          percent,
+          message: `Downloading ${download.name} (${index + 1}/${downloads.length})... ${percent}%`,
+        });
+      });
+
+      sendForgeProgress({
+        stage: "downloading",
+        percent: Math.round(((index + 1) / downloads.length) * 100),
+        message: `Cached ${download.name} (${index + 1}/${downloads.length}).`,
+      });
+    }
+  }
+
+  async function syncServerModsIntoProfile(mcDir: string, profileId: string) {
+    const modsDir = await getProfileModsDir(mcDir, profileId);
+    await ensureDir(modsDir);
+
+    const installedMods = await getInstalledModsForProfile(mcDir, profileId);
+    const installedNames = new Set(installedMods.map((mod) => mod.name));
+    const allServerMods = await getServerModsFromBackend();
+    const missingMods = allServerMods.filter(
+      (mod) => !installedNames.has(mod.name)
+    );
+    const uncachedModNames: string[] = [];
+
+    for (const mod of missingMods) {
+      const cachedSource = await getCachedModSource(mod.name);
+
+      if (!cachedSource) {
+        uncachedModNames.push(mod.name);
+      }
+    }
+
+    if (uncachedModNames.length > 0) {
+      const downloads = await getModDownloadsFromBackend(uncachedModNames);
+      await downloadModsToCache(downloads);
+    }
+
+    let completed = 0;
+
+    for (const mod of allServerMods) {
+      completed += 1;
+
+      if (installedNames.has(mod.name)) {
+        sendForgeProgress({
+          stage: "installing",
+          percent: Math.round((completed / allServerMods.length) * 100),
+          message: `Keeping ${mod.name} (${completed}/${allServerMods.length}).`,
+        });
+        continue;
+      }
+
+      const sourcePath = await getCachedModSource(mod.name);
+
+      if (!sourcePath) {
+        throw new Error(`Missing cached mod after download: ${mod.name}`);
+      }
+
+      await fs.copyFile(sourcePath, path.join(modsDir, mod.name));
+
+      sendForgeProgress({
+        stage: "installing",
+        percent: Math.round((completed / allServerMods.length) * 100),
+        message: `Installed ${mod.name} (${completed}/${allServerMods.length}).`,
+      });
+    }
+  }
+
+  async function updateSelectedProfile(mcDir: string, profileId: string) {
+    sendForgeProgress({
+      stage: "searching",
+      percent: 0,
+      message: "Checking profile status...",
+    });
+
+    const profile = await getProfileById(mcDir, profileId);
+    const forgeInfo = await getRequiredForgeInfo();
+
+    if (profile.lastVersionId !== forgeInfo.forgeVersionId) {
+      await installForgeFromBackend(mcDir);
+      await updateProfileVersion(mcDir, profileId, forgeInfo.forgeVersionId);
+    } else {
+      sendForgeProgress({
+        stage: "installing",
+        percent: 100,
+        message: "Required Forge version already installed.",
+      });
+    }
+
+    await syncServerModsIntoProfile(mcDir, profileId);
+
+    sendForgeProgress({
+      stage: "done",
+      percent: 100,
+      message: "Profile is ready.",
+    });
   }
 
   ipcMain.handle("mc:getRequiredForgeInfo", async () => {
@@ -482,6 +670,13 @@ app.whenReady().then(() => {
         fileName: result.fileName,
         localJarPath: result.localJarPath,
       };
+    }
+  );
+
+  ipcMain.handle(
+    "mc:updateSelectedProfile",
+    async (_e, mcDir: string, profileId: string) => {
+      await updateSelectedProfile(mcDir, profileId);
     }
   );
 

@@ -28,6 +28,7 @@ type ServerModInfo = {
   size: number;
   clientModified: string;
   serverModified: string;
+  downloadUrl?: string;
 };
 
 type InstalledModInfo = {
@@ -48,6 +49,7 @@ declare global {
       getSavedMinecraftDir: () => Promise<string>;
       pickMinecraftDir: () => Promise<string | null>;
       getProfiles: (dir: string) => Promise<McProfile[]>;
+      openProfileFolder: (dir: string, profileId: string) => Promise<void>;
       updateProfileName: (
         dir: string,
         profileId: string,
@@ -64,6 +66,7 @@ declare global {
         dir: string,
         profileId: string
       ) => Promise<void>;
+      updateSelectedProfile: (dir: string, profileId: string) => Promise<void>;
 
       onForgeInstallProgress: (
         callback: (payload: ForgeInstallProgress) => void

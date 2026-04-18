@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import ModList, { ModListItem, ModTag } from "./components/ModList";
-import ProgressBar from "./components/ProgressBar";
+import ProgressBar, { ForgeInstallProgress } from "./components/ProgressBar";
 import { McProfile } from "../electron/types/minecraft";
 
 type ServerModInfo = {
@@ -71,6 +71,11 @@ export default function App() {
   const [installedMods, setInstalledMods] = useState<InstalledModInfo[]>([]);
   const [isLoadingInstalledMods, setIsLoadingInstalledMods] = useState(false);
   const [profileNameInput, setProfileNameInput] = useState("");
+  const [progress, setProgress] = useState<ForgeInstallProgress>({
+    stage: "searching",
+    percent: 0,
+    message: "",
+  });
 
   const selectedProfile =
     profiles.find((profile) => profile.id === selectedProfileId) ?? null;
@@ -78,6 +83,14 @@ export default function App() {
   useEffect(() => {
     setProfileNameInput(selectedProfile?.name ?? "");
   }, [selectedProfile?.id, selectedProfile?.name]);
+
+  useEffect(() => {
+    const unsubscribe = window.mc.onForgeInstallProgress((payload) => {
+      setProgress(payload);
+    });
+
+    return unsubscribe;
+  }, []);
 
   const versionMatches =
     !!selectedProfile?.lastVersionId &&
@@ -133,6 +146,11 @@ export default function App() {
         : count;
     }, 0);
   }, [installedModNames, serverMods]);
+
+  const isProfileUpToDate =
+    !!selectedProfile &&
+    versionMatches &&
+    installedRequiredModsCount === requiredServerModsCount;
 
   const installedModListItems = useMemo<ModListItem[]>(
     () =>
@@ -311,6 +329,76 @@ export default function App() {
     }
   }
 
+  async function handleCleanInstall() {
+    try {
+      setError("");
+      setIsInstalling(true);
+      setProgress({
+        stage: "searching",
+        percent: 0,
+        message: "Starting...",
+      });
+
+      const result = await window.mc.installForgeClean(dir);
+      const updatedProfiles = await reloadProfiles();
+      const createdProfileStillExists = updatedProfiles.some(
+        (profile) => profile.id === result.profileId
+      );
+
+      if (createdProfileStillExists) {
+        setSelectedProfileId(result.profileId);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to install Forge.");
+      setProgress({
+        stage: "error",
+        percent: 0,
+        message: "Forge installation failed.",
+      });
+    } finally {
+      setIsInstalling(false);
+    }
+  }
+
+  async function handleUpdateSelectedProfile() {
+    try {
+      if (!selectedProfileId) {
+        setError("No profile selected.");
+        return;
+      }
+
+      setError("");
+      setIsInstalling(true);
+      setProgress({
+        stage: "searching",
+        percent: 0,
+        message: isProfileUpToDate ? "Profile is ready." : "Starting update...",
+      });
+
+      if (!isProfileUpToDate) {
+        await window.mc.updateSelectedProfile(dir, selectedProfileId);
+        await reloadProfiles();
+      }
+
+      const mods = await window.mc.getInstalledMods(dir, selectedProfileId);
+      setInstalledMods(mods);
+      setProgress({
+        stage: "done",
+        percent: 100,
+        message: "Profile is ready.",
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update profile.");
+      setProgress({
+        stage: "error",
+        percent: 0,
+        message: "Profile update failed.",
+      });
+    } finally {
+      setIsInstalling(false);
+    }
+  }
+
   async function saveProfileName() {
     const trimmedName = profileNameInput.trim();
 
@@ -340,6 +428,19 @@ export default function App() {
     } catch {
       setError("Failed to update profile name.");
       setProfileNameInput(selectedProfile.name);
+    }
+  }
+
+  async function openSelectedProfileFolder() {
+    if (!dir || !selectedProfileId) {
+      return;
+    }
+
+    try {
+      setError("");
+      await window.mc.openProfileFolder(dir, selectedProfileId);
+    } catch {
+      setError("Failed to open profile folder.");
     }
   }
 
@@ -373,7 +474,7 @@ export default function App() {
             </div>
 
             <strong className="field-label">Current Profile:</strong>
-            <div className="field-block">
+            <div className="field-block profile-row">
               <select
                 className="select-input"
                 value={selectedProfileId}
@@ -393,6 +494,14 @@ export default function App() {
                   ))
                 )}
               </select>
+              <button
+                className="open-folder-button"
+                onClick={() => void openSelectedProfileFolder()}
+                disabled={isInstalling || !dir || !selectedProfileId}
+                title="Open selected profile folder"
+              >
+                Open
+              </button>
             </div>
 
             <div className="flex ac">
@@ -461,6 +570,7 @@ export default function App() {
                       <ModList items={installedModListItems} />
                     )}
                   </div>
+                  {/* {TODO: Add a small btn here to delete extra mods, with a popup to confirm} */}
                 </div>
               )}
             </div>
@@ -498,16 +608,39 @@ export default function App() {
         </div>
 
         <div className="installer-card">
-          <ProgressBar
-            mcDir={dir}
-            selectedProfileId={selectedProfileId}
-            setSelectedProfileId={setSelectedProfileId}
-            error={error}
-            setError={setError}
-            isInstalling={isInstalling}
-            setIsInstalling={setIsInstalling}
-            reloadProfiles={reloadProfiles}
-          />
+          <div className="installer-progress">
+            <div>
+              {isLoadingRequiredForgeVersion || isLoadingServerMods ? (
+                <div>Checking whether the profile is up to date...</div>
+              ) : !selectedProfile ? (
+                <div>Select a profile to check its status.</div>
+              ) : isLoadingInstalledMods ? (
+                <div>Checking installed mods...</div>
+              ) : isProfileUpToDate ? (
+                <div>Your profile is up to date with server mods! ✅</div>
+              ) : (
+                <div>Your profile is not up to date with server mods. ❌</div>
+              )}
+            </div>
+            <ProgressBar progress={progress} />
+          </div>
+          <div className="actions">
+            <button
+              className="forge-installer-button clean"
+              onClick={() => void handleCleanInstall()}
+              disabled={isInstalling || !dir}
+            >
+              {isInstalling ? "Installing Forge..." : "Clean Installation"}
+            </button>
+
+            <button
+              className="forge-installer-button update"
+              onClick={() => void handleUpdateSelectedProfile()}
+              disabled={isInstalling || !dir || !selectedProfileId}
+            >
+              {isProfileUpToDate ? "PLAY" : "Update"}
+            </button>
+          </div>
         </div>
 
         {error ? <p className="app-error">{error}</p> : null}

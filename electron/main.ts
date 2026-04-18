@@ -36,6 +36,8 @@ process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL
 
 let win: BrowserWindow | null;
 
+const BACKEND_BASE_URL = process.env.BASE;
+
 type InstallForgeProgress =
   | { stage: "searching"; percent: number; message: string }
   | { stage: "downloading"; percent: number; message: string }
@@ -344,7 +346,7 @@ function readServersFile(raw: Buffer) {
 }
 
 async function getServerIpFromBackend() {
-  const res = await fetch("http://localhost:4032/mc/server-ip");
+  const res = await fetch(BACKEND_BASE_URL + "/mc/server-ip");
 
   if (!res.ok) {
     throw new Error(
@@ -741,7 +743,7 @@ app.whenReady().then(() => {
   );
 
   async function getForgeInfoFromBackend() {
-    const res = await fetch("http://localhost:4032/files/forge");
+    const res = await fetch(BACKEND_BASE_URL + "/files/forge");
 
     if (!res.ok) {
       throw new Error(
@@ -775,7 +777,7 @@ app.whenReady().then(() => {
   }
 
   async function getServerModsFromBackend(): Promise<ServerModInfo[]> {
-    const res = await fetch("http://localhost:4032/files/mods");
+    const res = await fetch(BACKEND_BASE_URL + "/files/mods");
 
     if (!res.ok) {
       throw new Error(
@@ -883,7 +885,7 @@ app.whenReady().then(() => {
       });
 
       const downloadUrl =
-        forgeInfo.downloadUrl ?? "http://localhost:4032/files/forge/download";
+        forgeInfo.downloadUrl ?? BACKEND_BASE_URL + "/files/forge/download";
 
       await downloadFileWithProgress(downloadUrl, localJarPath, (percent) => {
         sendForgeProgress({
@@ -929,7 +931,7 @@ app.whenReady().then(() => {
   async function getModDownloadsFromBackend(
     modNames: string[]
   ): Promise<ModDownloadInfo[]> {
-    const res = await fetch("http://localhost:4032/files/mods/download", {
+    const res = await fetch(BACKEND_BASE_URL + "/files/mods/download", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -1136,12 +1138,20 @@ app.whenReady().then(() => {
 
   ipcMain.handle("mc:installForgeClean", async (_e, mcDir: string) => {
     let gameDir: string | undefined;
+    const cancelledResult = {
+      success: false,
+      cancelled: true,
+      profileId: "",
+      forgeVersionId: "",
+      fileName: "",
+      localJarPath: "",
+    };
 
     const locationChoice = await dialog.showMessageBox({
       type: "question",
       title: "Clean Installation Location",
       message:
-        "Do you want to create the new profile in a different folder?\nRecommended so it does not affect the mods in .minecraft.\nE.G: Desktop/mynewProfile/",
+        "Would you like to create the new profile in a different folder?\nE.G: Desktop/mynewProfile/\nRecommended so it does not affect the mods in .minecraft.",
       buttons: [
         "Choose Different Folder (Recommended)",
         "Use .minecraft",
@@ -1152,14 +1162,7 @@ app.whenReady().then(() => {
     });
 
     if (locationChoice.response === 2) {
-      return {
-        success: false,
-        cancelled: true,
-        profileId: "",
-        forgeVersionId: result.forgeVersionId,
-        fileName: result.fileName,
-        localJarPath: result.localJarPath,
-      };
+      return cancelledResult;
     }
 
     if (locationChoice.response === 0) {
@@ -1169,14 +1172,7 @@ app.whenReady().then(() => {
       });
 
       if (folderSelection.canceled || folderSelection.filePaths.length === 0) {
-        return {
-          success: false,
-          cancelled: true,
-          profileId: "",
-          forgeVersionId: result.forgeVersionId,
-          fileName: result.fileName,
-          localJarPath: result.localJarPath,
-        };
+        return cancelledResult;
       }
 
       gameDir = folderSelection.filePaths[0];

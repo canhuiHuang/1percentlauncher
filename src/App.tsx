@@ -762,6 +762,15 @@ export default function App() {
     }
   }
 
+  async function openLauncherDownloadsFolder() {
+    try {
+      setError("");
+      await window.mc.openLauncherDownloadsFolder();
+    } catch {
+      setError("Failed to open launcher's download folder.");
+    }
+  }
+
   async function saveProfileRamMb(ramMb: number) {
     if (!dir || !selectedProfileId) {
       return;
@@ -1004,8 +1013,15 @@ export default function App() {
 
           <section className="panel server-panel">
             {isLoadingServerInfo ? (
-              <div className="server-info-loading" role="status" aria-live="polite">
-                <span className="server-info-loading-spinner" aria-hidden="true" />
+              <div
+                className="server-info-loading"
+                role="status"
+                aria-live="polite"
+              >
+                <span
+                  className="server-info-loading-spinner"
+                  aria-hidden="true"
+                />
                 <span>Loading server info...</span>
               </div>
             ) : null}
@@ -1063,44 +1079,57 @@ export default function App() {
               )}
             </div>
             <ProgressBar progress={progress} />
-            <div className="ram-control">
-              <strong className="ram-label">Profile RAM:</strong>
-              <input
-                className="ram-slider"
-                type="range"
-                min={1024}
-                max={Math.max(1024, systemMemoryMb)}
-                step={512}
-                value={profileRamMb}
-                onChange={(e) => setProfileRamMb(Number(e.target.value))}
-                onPointerUp={(e) =>
-                  void saveProfileRamMb(
-                    Number((e.target as HTMLInputElement).value)
-                  )
-                }
-                onMouseUp={(e) =>
-                  void saveProfileRamMb(
-                    Number((e.target as HTMLInputElement).value)
-                  )
-                }
-                onTouchEnd={(e) =>
-                  void saveProfileRamMb(
-                    Number((e.target as HTMLInputElement).value)
-                  )
-                }
-                onKeyUp={(e) =>
-                  void saveProfileRamMb(
-                    Number((e.target as HTMLInputElement).value)
-                  )
-                }
-                onBlur={(e) =>
-                  void saveProfileRamMb(
-                    Number((e.target as HTMLInputElement).value)
-                  )
-                }
-                disabled={isInstalling || !dir || !selectedProfileId}
-              />
-              <span className="ram-value">{formatRamLabel(profileRamMb)}</span>
+            <div className="below-progress-bar row flex mt-4">
+              <div className="ram-control">
+                <strong className="ram-label">Profile RAM:</strong>
+                <input
+                  className="ram-slider"
+                  type="range"
+                  min={1024}
+                  max={Math.max(1024, systemMemoryMb)}
+                  step={512}
+                  value={profileRamMb}
+                  onChange={(e) => setProfileRamMb(Number(e.target.value))}
+                  onPointerUp={(e) =>
+                    void saveProfileRamMb(
+                      Number((e.target as HTMLInputElement).value)
+                    )
+                  }
+                  onMouseUp={(e) =>
+                    void saveProfileRamMb(
+                      Number((e.target as HTMLInputElement).value)
+                    )
+                  }
+                  onTouchEnd={(e) =>
+                    void saveProfileRamMb(
+                      Number((e.target as HTMLInputElement).value)
+                    )
+                  }
+                  onKeyUp={(e) =>
+                    void saveProfileRamMb(
+                      Number((e.target as HTMLInputElement).value)
+                    )
+                  }
+                  onBlur={(e) =>
+                    void saveProfileRamMb(
+                      Number((e.target as HTMLInputElement).value)
+                    )
+                  }
+                  disabled={isInstalling || !dir || !selectedProfileId}
+                />
+                <span className="ram-value">
+                  {formatRamLabel(profileRamMb)}
+                </span>
+              </div>
+
+              <button
+                className="open-folder-button-2"
+                onClick={() => void openLauncherDownloadsFolder()}
+                disabled={isInstalling}
+                title="Open launcher's download folder"
+              >
+                📂
+              </button>
             </div>
           </div>
           <div className="actions">

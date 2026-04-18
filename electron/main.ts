@@ -865,6 +865,11 @@ app.whenReady().then(() => {
     }
   );
 
+  ipcMain.handle("mc:openLauncherDownloadsFolder", async () => {
+    await ensureDir(getDownloadsDir());
+    await shell.openPath(getDownloadsDir());
+  });
+
   ipcMain.handle(
     "mc:updateProfileName",
     async (_e, mcDir: string, profileId: string, profileName: string) => {

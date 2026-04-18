@@ -20,6 +20,8 @@ contextBridge.exposeInMainWorld("mc", {
     ipcRenderer.invoke("mc:profileHasServerIp", dir, profileId),
   openProfileFolder: (dir: string, profileId: string) =>
     ipcRenderer.invoke("mc:openProfileFolder", dir, profileId),
+  openLauncherDownloadsFolder: () =>
+    ipcRenderer.invoke("mc:openLauncherDownloadsFolder"),
   updateProfileRamMb: (dir: string, profileId: string, ramMb: number) =>
     ipcRenderer.invoke("mc:updateProfileRamMb", dir, profileId, ramMb),
   launchSelectedProfile: (dir: string, profileId: string) =>

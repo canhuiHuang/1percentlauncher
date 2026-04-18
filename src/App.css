@@ -307,6 +307,18 @@ body {
   flex: 0 0 auto;
 }
 
+.open-folder-button-2 {
+  padding: 10px 16px;
+  border-radius: 6px;
+  border: none;
+  color: #f7fff8;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  box-shadow: 0 8px 18px rgba(53, 88, 60, 0.16);
+  flex: 0 0 auto;
+}
+
 .browse-button:disabled {
   cursor: not-allowed;
 }
@@ -569,6 +581,12 @@ body {
 
 .f-last {
   margin-top: auto;
+}
+
+.below-progress-bar {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
 }
 
 @keyframes server-info-spin {

@@ -91,6 +91,7 @@ declare global {
       getProfiles: (dir: string) => Promise<McProfile[]>;
       profileHasServerIp: (dir: string, profileId: string) => Promise<boolean>;
       openProfileFolder: (dir: string, profileId: string) => Promise<void>;
+      openLauncherDownloadsFolder: () => Promise<void>;
       updateProfileRamMb: (
         dir: string,
         profileId: string,

@@ -75,6 +75,10 @@ function sendForgeProgress(payload: InstallForgeProgress) {
   win?.webContents.send("mc:forgeInstallProgress", payload);
 }
 
+function getRuntimeRootDir() {
+  return app.isPackaged ? path.dirname(process.execPath) : app.getPath("userData");
+}
+
 function createWindow() {
   win = new BrowserWindow({
     width: 940,
@@ -118,8 +122,15 @@ async function listDropboxFolder(token: string, folderPath: string) {
 }
 
 function getForgeVersionIdFromInstallerFileName(fileName: string) {
-  // forge-1.20.1-47.4.10-installer.jar -> forge-1.20.1-47.4.10
-  return fileName.replace(/-installer\.jar$/i, "");
+  // forge-1.20.1-47.4.10-installer.jar -> 1.20.1-forge-47.4.10
+  const normalized = fileName.replace(/-installer\.jar$/i, "");
+  const match = normalized.match(/^forge-([^-]+)-(.+)$/i);
+
+  if (!match) {
+    return normalized;
+  }
+
+  return `${match[1]}-forge-${match[2]}`;
 }
 
 async function pathExists(targetPath: string) {
@@ -136,7 +147,15 @@ async function ensureDir(targetPath: string) {
 }
 
 function getDownloadsDir() {
-  return path.join(app.getPath("userData"), "downloads");
+  return path.join(getRuntimeRootDir(), "downloads");
+}
+
+function getTempDir() {
+  return path.join(getRuntimeRootDir(), "temp");
+}
+
+async function ensureRuntimeDirectories() {
+  await Promise.all([ensureDir(getDownloadsDir()), ensureDir(getTempDir())]);
 }
 
 async function getProfileById(mcDir: string, profileId: string) {
@@ -575,16 +594,18 @@ function getDefaultProfileRamMb() {
 }
 
 function buildJavaArgsWithRam(existingJavaArgs: string | undefined, ramMb: number) {
-  const baseArgs = (existingJavaArgs ?? "")
-    .replace(/-Xmx\d+[mMgG]\b/g, "")
-    .replace(/-Xms\d+[mMgG]\b/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
+  const ramArg = ramMb % 1024 === 0 ? `-Xmx${ramMb / 1024}G` : `-Xmx${ramMb}M`;
+  const normalizedArgs = (existingJavaArgs ?? "").trim();
 
-  return [`-Xmx${ramMb}M`, `-Xms${ramMb}M`, baseArgs]
-    .filter(Boolean)
-    .join(" ")
-    .trim();
+  if (!normalizedArgs) {
+    return `${ramArg} -XX:+UnlockExperimentalVMOptions -XX:+UseG1GC -XX:G1NewSizePercent=20 -XX:G1ReservePercent=20 -XX:MaxGCPauseMillis=50 -XX:G1HeapRegionSize=32M`;
+  }
+
+  if (/-Xmx\d+[mMgG]\b/.test(normalizedArgs)) {
+    return normalizedArgs.replace(/-Xmx\d+[mMgG]\b/g, ramArg);
+  }
+
+  return `${ramArg} ${normalizedArgs}`.trim();
 }
 
 app.on("window-all-closed", () => {
@@ -599,6 +620,8 @@ app.on("activate", () => {
 });
 
 app.whenReady().then(() => {
+  void ensureRuntimeDirectories();
+
   ipcMain.handle("mc:getSavedMinecraftDir", async () => {
     const config = await readConfig();
 

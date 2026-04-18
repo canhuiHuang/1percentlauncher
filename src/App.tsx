@@ -49,16 +49,18 @@ function buildJavaArgsPreview(
   existingJavaArgs: string | undefined,
   ramMb: number
 ) {
-  const baseArgs = (existingJavaArgs ?? "")
-    .replace(/-Xmx\d+[mMgG]\b/g, "")
-    .replace(/-Xms\d+[mMgG]\b/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
+  const ramArg = ramMb % 1024 === 0 ? `-Xmx${ramMb / 1024}G` : `-Xmx${ramMb}M`;
+  const normalizedArgs = (existingJavaArgs ?? "").trim();
 
-  return [`-Xmx${ramMb}M`, `-Xms${ramMb}M`, baseArgs]
-    .filter(Boolean)
-    .join(" ")
-    .trim();
+  if (!normalizedArgs) {
+    return `${ramArg} -XX:+UnlockExperimentalVMOptions -XX:+UseG1GC -XX:G1NewSizePercent=20 -XX:G1ReservePercent=20 -XX:MaxGCPauseMillis=50 -XX:G1HeapRegionSize=32M`;
+  }
+
+  if (/-Xmx\d+[mMgG]\b/.test(normalizedArgs)) {
+    return normalizedArgs.replace(/-Xmx\d+[mMgG]\b/g, ramArg);
+  }
+
+  return `${ramArg} ${normalizedArgs}`.trim();
 }
 
 function formatRamLabel(ramMb: number) {

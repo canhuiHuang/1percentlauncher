@@ -270,26 +270,26 @@ export default function App() {
 
   const optionalServerModsCount = serverMods.length - requiredServerModsCount;
 
-  const appUpdateSummary =
-    appUpdateState.status === "checking"
-      ? "Checking for launcher updates..."
-      : appUpdateState.status === "downloading"
-      ? `Downloading launcher update${
-          appUpdateState.progress != null
-            ? ` (${Math.round(appUpdateState.progress)}%)`
-            : "..."
-        }`
-      : appUpdateState.status === "available"
-      ? "Launcher update available"
-      : appUpdateState.status === "downloaded"
-      ? "Launcher update ready to install"
-      : appUpdateState.status === "up-to-date"
-      ? "Launcher is up to date"
-      : appUpdateState.status === "error"
-      ? "Launcher update check failed"
-      : appUpdateState.status === "disabled"
-      ? "Launcher updates disabled in development build"
-      : "Launcher update status idle";
+  // const appUpdateSummary =
+  //   appUpdateState.status === "checking"
+  //     ? "Checking for launcher updates..."
+  //     : appUpdateState.status === "downloading"
+  //     ? `Downloading launcher update${
+  //         appUpdateState.progress != null
+  //           ? ` (${Math.round(appUpdateState.progress)}%)`
+  //           : "..."
+  //       }`
+  //     : appUpdateState.status === "available"
+  //     ? "Launcher update available"
+  //     : appUpdateState.status === "downloaded"
+  //     ? "Launcher update ready to install"
+  //     : appUpdateState.status === "up-to-date"
+  //     ? "Launcher is up to date"
+  //     : appUpdateState.status === "error"
+  //     ? "Launcher update check failed"
+  //     : appUpdateState.status === "disabled"
+  //     ? "Launcher updates disabled in development build"
+  //     : "Launcher update status idle";
 
   const installedModNames = useMemo(
     () => new Set(installedMods.map((mod) => normalizeModName(mod.name))),

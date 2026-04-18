@@ -102,6 +102,19 @@ type InstalledModInfo = {
   modified: string;
 };
 
+function getMainProcessLogPath() {
+  return path.join(app.getPath("userData"), "main.log");
+}
+
+async function appendMainLog(message: string) {
+  try {
+    const line = `[${new Date().toISOString()}] ${message}\n`;
+    await fs.appendFile(getMainProcessLogPath(), line, "utf-8");
+  } catch {
+    // Ignore logging failures.
+  }
+}
+
 function setAppUpdateState(nextState: AppUpdateState) {
   appUpdateState = nextState;
   win?.webContents.send("app:update-state", nextState);
@@ -261,7 +274,10 @@ function createWindow() {
 
   win.webContents.on(
     "did-fail-load",
-    (_event, errorCode, errorDescription, validatedURL) => {
+    async (_event, errorCode, errorDescription, validatedURL) => {
+      await appendMainLog(
+        `Renderer failed to load: ${errorCode} ${errorDescription} ${validatedURL}`
+      );
       console.error("Renderer failed to load:", {
         errorCode,
         errorDescription,
@@ -270,8 +286,13 @@ function createWindow() {
     }
   );
 
-  win.webContents.on("render-process-gone", (_event, details) => {
+  win.webContents.on("render-process-gone", async (_event, details) => {
+    await appendMainLog(`Renderer process gone: ${JSON.stringify(details)}`);
     console.error("Renderer process crashed:", details);
+  });
+
+  win.webContents.on("console-message", async (_event, level, message) => {
+    await appendMainLog(`Renderer console [${level}]: ${message}`);
   });
 
   win.webContents.once("did-finish-load", () => {
@@ -1221,6 +1242,12 @@ app.whenReady().then(() => {
         message: "Required Forge version already installed.",
       });
     }
+
+    sendForgeProgress({
+      stage: "installing",
+      percent: 0,
+      message: "Checking and syncing required mods...",
+    });
 
     await syncServerModsIntoProfile(mcDir, profileId);
 

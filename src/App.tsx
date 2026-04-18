@@ -239,6 +239,8 @@ export default function App() {
   const selectedProfileIcon = selectedProfile?.icon
     ? PROFILE_ICON_EMOJIS[selectedProfile.icon] ?? "🎮"
     : "🎮";
+  const isSelectedProfileCustomIcon =
+    !!selectedProfile?.icon && selectedProfile.icon.startsWith("data:image/");
   const areServerActionsDisabled =
     isInstalling ||
     isLaunchingGame ||
@@ -780,15 +782,21 @@ export default function App() {
       <div className="app-container">
         <div className="app-grid">
           <section className="panel settings-panel">
-            <h2 className="panel-title">Settings</h2>
-
-            <strong className="field-label">Current Profile:</strong>
+            <h2 className="panel-title">Current Profile</h2>
             <div className="field-block profile-row">
               <div
                 className="profile-icon-badge"
                 title={selectedProfile?.icon || "Profile icon"}
               >
-                {selectedProfileIcon}
+                {isSelectedProfileCustomIcon ? (
+                  <img
+                    className="profile-icon-image"
+                    src={selectedProfile.icon}
+                    alt={`${selectedProfile?.name || "Profile"} icon`}
+                  />
+                ) : (
+                  selectedProfileIcon
+                )}
               </div>
               <select
                 className="select-input"
@@ -895,24 +903,27 @@ export default function App() {
               )}
             </div>
 
-            <strong className="field-label">Minecraft Directory:</strong>
-            <div className="field-block directory-row">
-              <input
-                className="text-input"
-                type="text"
-                value={dir}
-                placeholder="Enter or select Minecraft directory..."
-                onChange={(e) => setDir(e.target.value)}
-                readOnly
-                disabled={isInstalling}
-              />
-              <button
-                className="browse-button"
-                onClick={chooseFolder}
-                disabled={isInstalling}
-              >
-                📂
-              </button>
+            <div className="f-last">
+              <strong className="field-label mb-2">Minecraft Directory:</strong>
+              <div className="field-block directory-row">
+                <input
+                  className="text-input"
+                  type="text"
+                  value={dir}
+                  placeholder="Enter or select Minecraft directory..."
+                  onChange={(e) => setDir(e.target.value)}
+                  readOnly
+                  disabled={isInstalling}
+                />
+                <button
+                  className="browse-button"
+                  onClick={chooseFolder}
+                  disabled={isInstalling}
+                  title="Choose a different minecraft directory"
+                >
+                  📂
+                </button>
+              </div>
             </div>
           </section>
 
@@ -1037,7 +1048,9 @@ export default function App() {
             </div>
 
             <button
-              className="forge-installer-button update"
+              className={`forge-installer-button ${
+                isProfileUpToDate ? "open" : "update"
+              }`}
               onClick={() =>
                 void (isProfileUpToDate
                   ? handlePlaySelectedProfile()

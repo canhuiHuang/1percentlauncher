@@ -1,6 +1,10 @@
 import { contextBridge, ipcRenderer } from "electron";
 
 contextBridge.exposeInMainWorld("mc", {
+  getAppUpdateState: () => ipcRenderer.invoke("app:getUpdateState"),
+  checkForAppUpdates: () => ipcRenderer.invoke("app:checkForUpdates"),
+  downloadAppUpdate: () => ipcRenderer.invoke("app:downloadUpdate"),
+  installDownloadedUpdate: () => ipcRenderer.invoke("app:installDownloadedUpdate"),
   getAppConfig: () => ipcRenderer.invoke("mc:getAppConfig"),
   dismissOnboarding: () => ipcRenderer.invoke("mc:dismissOnboarding"),
   getSavedMinecraftDir: () => ipcRenderer.invoke("mc:getSavedMinecraftDir"),
@@ -59,6 +63,45 @@ contextBridge.exposeInMainWorld("mc", {
 
     return () => {
       ipcRenderer.removeListener("mc:forgeInstallProgress", listener);
+    };
+  },
+
+  onAppUpdateState: (
+    callback: (payload: {
+      status:
+        | "idle"
+        | "disabled"
+        | "checking"
+        | "available"
+        | "downloading"
+        | "downloaded"
+        | "up-to-date"
+        | "error";
+      message: string;
+      progress: number | null;
+    }) => void
+  ) => {
+    const listener = (
+      _event: unknown,
+      payload: {
+        status:
+          | "idle"
+          | "disabled"
+          | "checking"
+          | "available"
+          | "downloading"
+          | "downloaded"
+          | "up-to-date"
+          | "error";
+        message: string;
+        progress: number | null;
+      }
+    ) => callback(payload);
+
+    ipcRenderer.on("app:update-state", listener);
+
+    return () => {
+      ipcRenderer.removeListener("app:update-state", listener);
     };
   },
 });

@@ -21,6 +21,7 @@ import {
   setMinecraftDir,
   setOnboardingDismissed,
 } from "./services/config";
+import { autoUpdater } from "electron-updater";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const runtimeEnvPath = app.isPackaged
@@ -40,6 +41,26 @@ process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL
   : RENDERER_DIST;
 
 let win: BrowserWindow | null;
+let isAutoUpdaterConfigured = false;
+let autoUpdaterListenersRegistered = false;
+
+type AppUpdateState =
+  | { status: "idle"; message: string; progress: number | null }
+  | { status: "disabled"; message: string; progress: number | null }
+  | { status: "checking"; message: string; progress: number | null }
+  | { status: "available"; message: string; progress: number | null }
+  | { status: "downloading"; message: string; progress: number | null }
+  | { status: "downloaded"; message: string; progress: number | null }
+  | { status: "up-to-date"; message: string; progress: number | null }
+  | { status: "error"; message: string; progress: number | null };
+
+let appUpdateState: AppUpdateState = {
+  status: "idle",
+  message: "Auto-update not checked yet.",
+  progress: null,
+};
+let isUpdateDownloaded = false;
+let isUpdateDownloading = false;
 
 const BACKEND_BASE_URL = process.env.BASE;
 type InstallForgeProgress =
@@ -81,6 +102,130 @@ type InstalledModInfo = {
   modified: string;
 };
 
+function setAppUpdateState(nextState: AppUpdateState) {
+  appUpdateState = nextState;
+  win?.webContents.send("app:update-state", nextState);
+}
+
+function configureAutoUpdater() {
+  if (isAutoUpdaterConfigured) {
+    return true;
+  }
+
+  if (!app.isPackaged) {
+    setAppUpdateState({
+      status: "disabled",
+      message: "Auto-update is disabled in development builds.",
+      progress: null,
+    });
+    return false;
+  }
+
+  autoUpdater.autoDownload = false;
+  autoUpdater.autoInstallOnAppQuit = true;
+
+  isAutoUpdaterConfigured = true;
+  return true;
+}
+
+function registerAutoUpdaterListeners() {
+  if (autoUpdaterListenersRegistered) {
+    return;
+  }
+
+  autoUpdaterListenersRegistered = true;
+
+  autoUpdater.on("checking-for-update", () => {
+    isUpdateDownloaded = false;
+    isUpdateDownloading = false;
+    setAppUpdateState({
+      status: "checking",
+      message: "Checking for updates...",
+      progress: null,
+    });
+  });
+
+  autoUpdater.on("update-available", (info) => {
+    isUpdateDownloading = false;
+    setAppUpdateState({
+      status: "available",
+      message: `Update ${info.version} is available.`,
+      progress: null,
+    });
+  });
+
+  autoUpdater.on("update-not-available", (info) => {
+    isUpdateDownloaded = false;
+    isUpdateDownloading = false;
+    setAppUpdateState({
+      status: "up-to-date",
+      message: `App is up to date${info.version ? ` (${info.version})` : "."}`,
+      progress: null,
+    });
+  });
+
+  autoUpdater.on("download-progress", (progress) => {
+    isUpdateDownloading = true;
+    setAppUpdateState({
+      status: "downloading",
+      message: `Downloading update... ${Math.round(progress.percent)}%`,
+      progress: progress.percent,
+    });
+  });
+
+  autoUpdater.on("update-downloaded", (info) => {
+    isUpdateDownloaded = true;
+    isUpdateDownloading = false;
+    setAppUpdateState({
+      status: "downloaded",
+      message: `Update ${info.version} downloaded. Restart the app to install it.`,
+      progress: 100,
+    });
+  });
+
+  autoUpdater.on("error", (err) => {
+    isUpdateDownloaded = false;
+    isUpdateDownloading = false;
+    setAppUpdateState({
+      status: "error",
+      message: `Update error: ${err.message}`,
+      progress: null,
+    });
+  });
+}
+
+async function checkForAppUpdates() {
+  if (!configureAutoUpdater()) {
+    return appUpdateState;
+  }
+
+  registerAutoUpdaterListeners();
+  await autoUpdater.checkForUpdates();
+  return appUpdateState;
+}
+
+function installDownloadedAppUpdate() {
+  if (!isUpdateDownloaded) {
+    return false;
+  }
+
+  autoUpdater.quitAndInstall();
+  return true;
+}
+
+async function downloadAppUpdate() {
+  if (!configureAutoUpdater()) {
+    return false;
+  }
+
+  if (isUpdateDownloaded || isUpdateDownloading) {
+    return false;
+  }
+
+  await autoUpdater.downloadUpdate();
+  return true;
+}
+
 function sendForgeProgress(payload: InstallForgeProgress) {
   win?.webContents.send("mc:forgeInstallProgress", payload);
 }
@@ -100,7 +245,7 @@ function createWindow() {
     maximizable: false,
     autoHideMenuBar: true,
     titleBarStyle: "hidden",
-    icon: path.join(process.env.VITE_PUBLIC, "electron-vite.svg"),
+    icon: path.join(process.env.APP_ROOT, "icon.ico"),
     webPreferences: {
       preload: path.join(__dirname, "preload.mjs"),
     },
@@ -113,6 +258,10 @@ function createWindow() {
   } else {
     win.loadFile(path.join(RENDERER_DIST, "index.html"));
   }
+
+  win.webContents.once("did-finish-load", () => {
+    win?.webContents.send("app:update-state", appUpdateState);
+  });
 }
 
 function getForgeVersionIdFromInstallerFileName(fileName: string) {
@@ -623,6 +772,22 @@ app.whenReady().then(() => {
 
   ipcMain.handle("mc:closeWindow", async () => {
     win?.close();
+  });
+
+  ipcMain.handle("app:getUpdateState", async () => {
+    return appUpdateState;
+  });
+
+  ipcMain.handle("app:checkForUpdates", async () => {
+    return checkForAppUpdates();
+  });
+
+  ipcMain.handle("app:downloadUpdate", async () => {
+    return downloadAppUpdate();
+  });
+
+  ipcMain.handle("app:installDownloadedUpdate", async () => {
+    return installDownloadedAppUpdate();
   });
 
   ipcMain.handle("mc:pickMinecraftDir", async () => {
@@ -1195,4 +1360,5 @@ app.whenReady().then(() => {
   );
 
   createWindow();
+  void checkForAppUpdates();
 });

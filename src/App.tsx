@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import ModList, { ModListItem, ModTag } from "./components/ModList";
 import ProgressBar, { ForgeInstallProgress } from "./components/ProgressBar";
 import { McProfile } from "../electron/types/minecraft";
+import mcIcon from "./assets/mc-icon.png";
 
 type ServerModInfo = {
   name: string;
@@ -148,6 +149,8 @@ export default function App() {
     percent: 0,
     message: "",
   });
+  const hasPromptedForUpdateRef = useRef(false);
+  const hasPromptedToInstallUpdateRef = useRef(false);
 
   const selectedProfile =
     profiles.find((profile) => profile.id === selectedProfileId) ?? null;
@@ -166,6 +169,57 @@ export default function App() {
     const unsubscribe = window.mc.onForgeInstallProgress((payload) => {
       setProgress(payload);
     });
+
+    return unsubscribe;
+  }, []);
+
+  useEffect(() => {
+    function handleAppUpdateState(payload: {
+      status:
+        | "idle"
+        | "disabled"
+        | "checking"
+        | "available"
+        | "downloading"
+        | "downloaded"
+        | "up-to-date"
+        | "error";
+      message: string;
+      progress: number | null;
+    }) {
+      void payload.progress;
+
+      if (payload.status === "available" && !hasPromptedForUpdateRef.current) {
+        hasPromptedForUpdateRef.current = true;
+
+        const shouldUpdate = window.confirm(
+          `${payload.message}\n\nPress OK to download and install it.`
+        );
+
+        if (shouldUpdate) {
+          void window.mc.downloadAppUpdate();
+        }
+      }
+
+      if (
+        payload.status === "downloaded" &&
+        !hasPromptedToInstallUpdateRef.current
+      ) {
+        hasPromptedToInstallUpdateRef.current = true;
+
+        const shouldInstall = window.confirm(
+          `${payload.message}\n\nPress OK to restart and install it now.`
+        );
+
+        if (shouldInstall) {
+          void window.mc.installDownloadedUpdate();
+        }
+      }
+    }
+
+    void window.mc.getAppUpdateState().then(handleAppUpdateState);
+
+    const unsubscribe = window.mc.onAppUpdateState(handleAppUpdateState);
 
     return unsubscribe;
   }, []);
@@ -782,7 +836,10 @@ export default function App() {
       <div className="app-container">
         <div className="app-grid">
           <section className="panel settings-panel">
-            <h2 className="panel-title">Current Profile</h2>
+            <h2 className="panel-title panel-title-with-icon">
+              <img className="panel-title-icon" src={mcIcon} alt="" />
+              <span>Current Profile</span>
+            </h2>
             <div className="field-block profile-row">
               <div
                 className="profile-icon-badge"

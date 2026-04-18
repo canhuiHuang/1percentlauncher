@@ -7,13 +7,17 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build && electron-builder --win dir && node scripts/prepare-release.mjs",
+    "build": "tsc && vite build && electron-builder --win nsis --publish never",
+    "publish:release": "tsc && vite build && electron-builder --win nsis --publish always",
+    "publish:tag": "tsc && vite build && electron-builder --win nsis --publish onTag",
+    "build:portable": "tsc && vite build && electron-builder --win dir && node scripts/prepare-release.mjs",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview"
   },
   "dependencies": {
     "dotenv": "^17.4.2",
     "dropbox": "^10.34.0",
+    "electron-updater": "^6.8.3",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
   },
@@ -33,5 +37,21 @@
     "vite-plugin-electron": "^0.28.6",
     "vite-plugin-electron-renderer": "^0.14.5"
   },
-  "main": "dist-electron/main.js"
+  "main": "dist-electron/main.js",
+  "build": {
+    "appId": "com.onepercent.1percentlauncher",
+    "productName": "1percent launcher",
+    "icon": "icon.ico",
+    "win": {
+      "target": "nsis",
+      "icon": "icon.ico"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "canhuiHuang",
+        "repo": "1percentlauncher"
+      }
+    ]
+  }
 }

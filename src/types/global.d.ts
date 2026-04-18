@@ -58,9 +58,27 @@ type ForgeInstallProgress = {
   message: string;
 };
 
+type AppUpdateState = {
+  status:
+    | "idle"
+    | "disabled"
+    | "checking"
+    | "available"
+    | "downloading"
+    | "downloaded"
+    | "up-to-date"
+    | "error";
+  message: string;
+  progress: number | null;
+};
+
 declare global {
   interface Window {
     mc: {
+      getAppUpdateState: () => Promise<AppUpdateState>;
+      checkForAppUpdates: () => Promise<AppUpdateState>;
+      downloadAppUpdate: () => Promise<boolean>;
+      installDownloadedUpdate: () => Promise<boolean>;
       getAppConfig: () => Promise<AppConfig>;
       dismissOnboarding: () => Promise<AppConfig>;
       getSavedMinecraftDir: () => Promise<string>;
@@ -104,6 +122,9 @@ declare global {
 
       onForgeInstallProgress: (
         callback: (payload: ForgeInstallProgress) => void
+      ) => () => void;
+      onAppUpdateState: (
+        callback: (payload: AppUpdateState) => void
       ) => () => void;
     };
   }

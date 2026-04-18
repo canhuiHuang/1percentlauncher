@@ -210,6 +210,16 @@ export default function App() {
     versionMatches &&
     installedRequiredModsCount === requiredServerModsCount &&
     profileHasServerIp;
+  const isServerInfoUnavailable =
+    !isLoadingRequiredForgeVersion &&
+    !isLoadingServerMods &&
+    !requiredForgeVersionId;
+  const areServerActionsDisabled =
+    isInstalling ||
+    isLaunchingGame ||
+    !dir ||
+    !selectedProfileId ||
+    isServerInfoUnavailable;
 
   const installedModListItems = useMemo<ModListItem[]>(
     () =>
@@ -693,7 +703,7 @@ export default function App() {
               <button
                 className="open-folder-button"
                 onClick={() => void openSelectedProfileFolder()}
-                disabled={isInstalling || !dir || !selectedProfileId}
+                disabled={areServerActionsDisabled}
                 title="Open selected profile folder"
               >
                 📂
@@ -773,7 +783,11 @@ export default function App() {
           </section>
 
           <section className="panel server-panel">
-            <h2 className="panel-title">Server Info</h2>
+            <h2 className="panel-title">
+              {isServerInfoUnavailable
+                ? "Server Info (Unable to reach server)"
+                : "Server Info"}
+            </h2>
             <div className="flex">
               <strong className="field-label">Version: </strong>
               <div>
@@ -866,7 +880,7 @@ export default function App() {
               <button
                 className="forge-installer-button clean"
                 onClick={() => void handleCleanInstall()}
-                disabled={isInstalling || isLaunchingGame || !dir}
+                disabled={isInstalling || isLaunchingGame || !dir || isServerInfoUnavailable}
               >
                 {isInstalling ? "Installing Forge..." : "Clean Installation"}
               </button>
@@ -875,9 +889,7 @@ export default function App() {
                   type="checkbox"
                   checked={removeUnusedMods}
                   onChange={(e) => setRemoveUnusedMods(e.target.checked)}
-                  disabled={
-                    isInstalling || isLaunchingGame || !selectedProfileId
-                  }
+                  disabled={areServerActionsDisabled}
                 />
                 <span>remove unused mods</span>
               </label>
@@ -890,9 +902,7 @@ export default function App() {
                   ? handlePlaySelectedProfile()
                   : handleUpdateSelectedProfile())
               }
-              disabled={
-                isInstalling || isLaunchingGame || !dir || !selectedProfileId
-              }
+              disabled={areServerActionsDisabled}
             >
               {isProfileUpToDate ? "OPEN" : "Update"}
             </button>

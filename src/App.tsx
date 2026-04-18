@@ -294,6 +294,8 @@ export default function App() {
     versionMatches &&
     installedRequiredModsCount === requiredServerModsCount &&
     profileHasServerIp;
+  const isLoadingServerInfo =
+    isLoadingRequiredForgeVersion || isLoadingServerMods;
   const isServerInfoUnavailable =
     !isLoadingRequiredForgeVersion &&
     !isLoadingServerMods &&
@@ -1001,6 +1003,12 @@ export default function App() {
           </section>
 
           <section className="panel server-panel">
+            {isLoadingServerInfo ? (
+              <div className="server-info-loading" role="status" aria-live="polite">
+                <span className="server-info-loading-spinner" aria-hidden="true" />
+                <span>Loading server info...</span>
+              </div>
+            ) : null}
             <h2 className="panel-title">
               {isServerInfoUnavailable
                 ? "🌐 Server Info (Unable to reach server)"

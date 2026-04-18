@@ -209,6 +209,28 @@ body {
   box-shadow: 0 10px 30px rgba(44, 61, 35, 0.08);
 }
 
+.server-info-loading {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(184, 193, 164, 0.55);
+  background: rgba(240, 244, 232, 0.14);
+  color: #f3f0e9;
+  font-size: 13px;
+}
+
+.server-info-loading-spinner {
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  border: 2px solid rgba(243, 240, 233, 0.3);
+  border-top-color: #f3f0e9;
+  animation: server-info-spin 0.9s linear infinite;
+}
+
 .field-label {
   display: block;
 }
@@ -547,6 +569,12 @@ body {
 
 .f-last {
   margin-top: auto;
+}
+
+@keyframes server-info-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 @media (max-width: 800px) {

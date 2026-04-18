@@ -1,12 +1,6 @@
 import { useEffect, useState } from "react";
-
-type McProfile = {
-  id: string;
-  name: string;
-  gameDir?: string;
-  lastVersionId?: string;
-  lastUsed?: string;
-};
+import { McProfile } from "../../electron/types/minecraft";
+import "./ProgressBar.css";
 
 type ForgeInstallProgress = {
   stage: "searching" | "downloading" | "installing" | "done" | "error";
@@ -16,7 +10,6 @@ type ForgeInstallProgress = {
 
 type ForgeInstallerProps = {
   mcDir: string;
-  profiles: McProfile[];
   selectedProfileId: string;
   setSelectedProfileId: React.Dispatch<React.SetStateAction<string>>;
   error: string;
@@ -28,7 +21,6 @@ type ForgeInstallerProps = {
 
 export default function ForgeInstaller({
   mcDir,
-  profiles,
   selectedProfileId,
   setSelectedProfileId,
   error,
@@ -112,27 +104,18 @@ export default function ForgeInstaller({
   }
 
   return (
-    <div style={{ maxWidth: 420 }}>
-      <select
-        value={selectedProfileId}
-        onChange={(e) => setSelectedProfileId(e.target.value)}
-        disabled={isInstalling || profiles.length === 0}
-        style={{ width: "100%", marginBottom: 12 }}
-      >
-        {profiles.map((profile) => (
-          <option key={profile.id} value={profile.id}>
-            {profile.name}
-            {profile.lastVersionId ? ` (${profile.lastVersionId})` : ""}
-          </option>
-        ))}
-      </select>
-
-      <div style={{ display: "flex", gap: 8 }}>
-        <button onClick={handleCleanInstall} disabled={isInstalling || !mcDir}>
+    <div>
+      <div className="forge-installer-actions">
+        <button
+          className="forge-installer-button"
+          onClick={handleCleanInstall}
+          disabled={isInstalling || !mcDir}
+        >
           {isInstalling ? "Installing Forge..." : "Clean Installation"}
         </button>
 
         <button
+          className="forge-installer-button"
           onClick={handleInstallInSelectedProfile}
           disabled={isInstalling || !mcDir || !selectedProfileId}
         >
@@ -140,29 +123,16 @@ export default function ForgeInstaller({
         </button>
       </div>
 
-      <div
-        style={{
-          marginTop: 12,
-          width: "100%",
-          height: 16,
-          border: "1px solid #999",
-          borderRadius: 8,
-          overflow: "hidden",
-        }}
-      >
+      <div className="forge-progress-track">
         <div
-          style={{
-            width: `${progress.percent}%`,
-            height: "100%",
-            transition: "width 0.2s ease",
-            background: "#4caf50",
-          }}
+          className="forge-progress-fill"
+          style={{ width: `${progress.percent}%` }}
         />
       </div>
 
-      <div style={{ marginTop: 8 }}>{progress.message || "Idle"}</div>
+      <div className="forge-progress-message">{progress.message || "Idle"}</div>
 
-      {error ? <div style={{ marginTop: 8, color: "red" }}>{error}</div> : null}
+      {error ? <div className="forge-progress-error">{error}</div> : null}
     </div>
   );
 }

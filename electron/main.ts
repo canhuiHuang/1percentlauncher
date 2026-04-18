@@ -4,13 +4,13 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 import fs from "node:fs/promises";
 import { createWriteStream } from "node:fs";
-import { pipeline } from "node:stream/promises";
 import { spawn } from "node:child_process";
 import { getDefaultMinecraftDir } from "./services/minecraftPaths";
 import {
   readProfiles,
   createProfileForVersion,
   updateProfileVersion,
+  updateProfileName,
 } from "./services/profiles";
 import { readConfig, setMinecraftDir } from "./services/config";
 
@@ -34,6 +34,26 @@ type InstallForgeProgress =
   | { stage: "installing"; percent: number; message: string }
   | { stage: "done"; percent: number; message: string }
   | { stage: "error"; percent: number; message: string };
+
+type RequiredForgeInfo = {
+  fileName: string;
+  forgeVersionId: string;
+  downloadUrl?: string;
+};
+
+type ServerModInfo = {
+  name: string;
+  id: string;
+  size: number;
+  clientModified: string;
+  serverModified: string;
+};
+
+type InstalledModInfo = {
+  name: string;
+  size: number;
+  modified: string;
+};
 
 function sendForgeProgress(payload: InstallForgeProgress) {
   win?.webContents.send("mc:forgeInstallProgress", payload);
@@ -81,6 +101,15 @@ async function listDropboxFolder(token: string, folderPath: string) {
 function getForgeVersionIdFromInstallerFileName(fileName: string) {
   // forge-1.20.1-47.4.10-installer.jar -> forge-1.20.1-47.4.10
   return fileName.replace(/-installer\.jar$/i, "");
+}
+
+async function pathExists(targetPath: string) {
+  try {
+    await fs.access(targetPath);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 async function downloadDropboxFileWithProgress(
@@ -212,6 +241,13 @@ app.whenReady().then(() => {
     return readProfiles(mcDir);
   });
 
+  ipcMain.handle(
+    "mc:updateProfileName",
+    async (_e, mcDir: string, profileId: string, profileName: string) => {
+      await updateProfileName(mcDir, profileId, profileName);
+    }
+  );
+
   async function getForgeInfoFromBackend() {
     const res = await fetch("http://localhost:4032/files/forge");
 
@@ -232,6 +268,73 @@ app.whenReady().then(() => {
       fileName: string;
       downloadUrl?: string;
     };
+  }
+
+  async function getRequiredForgeInfo(): Promise<RequiredForgeInfo> {
+    const forgeInfo = await getForgeInfoFromBackend();
+
+    return {
+      fileName: forgeInfo.fileName,
+      forgeVersionId: getForgeVersionIdFromInstallerFileName(
+        forgeInfo.fileName
+      ),
+      downloadUrl: forgeInfo.downloadUrl,
+    };
+  }
+
+  async function getServerModsFromBackend(): Promise<ServerModInfo[]> {
+    const res = await fetch("http://localhost:4032/files/mods");
+
+    if (!res.ok) {
+      throw new Error(
+        `Backend mods lookup failed: ${res.status} ${await res.text()}`
+      );
+    }
+
+    const data = await res.json();
+
+    if (!data?.ok || !Array.isArray(data?.mods)) {
+      throw new Error("Backend did not return a valid mods list.");
+    }
+
+    return data.mods as ServerModInfo[];
+  }
+
+  async function getInstalledModsForProfile(
+    mcDir: string,
+    profileId: string
+  ): Promise<InstalledModInfo[]> {
+    const profiles = await readProfiles(mcDir);
+    const profile = profiles.find((entry) => entry.id === profileId);
+
+    if (!profile) {
+      throw new Error(`Profile not found: ${profileId}`);
+    }
+
+    const profileDir = profile.gameDir?.trim() || mcDir;
+    const modsDir = path.join(profileDir, "mods");
+
+    if (!(await pathExists(modsDir))) {
+      return [];
+    }
+
+    const entries = await fs.readdir(modsDir, { withFileTypes: true });
+    const files = await Promise.all(
+      entries
+        .filter((entry) => entry.isFile())
+        .map(async (entry) => {
+          const fullPath = path.join(modsDir, entry.name);
+          const stats = await fs.stat(fullPath);
+
+          return {
+            name: entry.name,
+            size: stats.size,
+            modified: stats.mtime.toISOString(),
+          };
+        })
+    );
+
+    return files.sort((a, b) => a.name.localeCompare(b.name));
   }
 
   async function downloadFileWithProgress(
@@ -281,7 +384,7 @@ app.whenReady().then(() => {
       message: "Searching for Forge installer...",
     });
 
-    const forgeInfo = await getForgeInfoFromBackend();
+    const forgeInfo = await getRequiredForgeInfo();
 
     const downloadsDir = path.join(app.getPath("userData"), "downloads");
     await fs.mkdir(downloadsDir, { recursive: true });
@@ -313,16 +416,27 @@ app.whenReady().then(() => {
 
     await runForgeInstaller(localJarPath, mcDir);
 
-    const forgeVersionId = getForgeVersionIdFromInstallerFileName(
-      forgeInfo.fileName
-    );
-
     return {
-      forgeVersionId,
+      forgeVersionId: forgeInfo.forgeVersionId,
       fileName: forgeInfo.fileName,
       localJarPath,
     };
   }
+
+  ipcMain.handle("mc:getRequiredForgeInfo", async () => {
+    return getRequiredForgeInfo();
+  });
+
+  ipcMain.handle("mc:getServerMods", async () => {
+    return getServerModsFromBackend();
+  });
+
+  ipcMain.handle(
+    "mc:getInstalledMods",
+    async (_e, mcDir: string, profileId: string) => {
+      return getInstalledModsForProfile(mcDir, profileId);
+    }
+  );
 
   ipcMain.handle("mc:installForgeClean", async (_e, mcDir: string) => {
     const result = await installForgeFromBackend(mcDir);

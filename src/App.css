@@ -1,0 +1,246 @@
+.app-shell {
+  min-height: 100vh;
+  padding: 20px;
+  font-family: Arial, sans-serif;
+  background: #f4f1ea;
+  color: #1f1b16;
+}
+
+.app-container {
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.app-title {
+  margin-top: 0;
+  margin-bottom: 20px;
+}
+
+.app-grid {
+  display: grid;
+  grid-template-columns: minmax(320px, 1fr) minmax(320px, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.panel {
+  padding: 20px;
+  border-radius: 10px;
+}
+
+.panel-title {
+  margin-top: 0;
+}
+
+.settings-panel {
+  width: 420px;
+  background: #fffaf1;
+  border: 1px solid #d6c8b8;
+  box-shadow: 0 10px 30px rgba(75, 52, 27, 0.08);
+}
+
+.server-panel {
+  width: 405px;
+  background: linear-gradient(
+    180deg,
+    rgba(48, 91, 57, 0.08),
+    rgba(98, 66, 32, 0.08)
+  );
+  border: 1px solid #b8c1a4;
+  box-shadow: 0 10px 30px rgba(44, 61, 35, 0.08);
+}
+
+.field-label {
+  display: block;
+}
+
+.field-block {
+  margin-top: 8px;
+  margin-bottom: 20px;
+}
+
+.directory-row {
+  display: flex;
+  gap: 8px;
+}
+
+.text-input,
+.select-input {
+  width: 70%;
+  padding: 10px 12px;
+  border: 1px solid #cdb9a3;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.text-input {
+  flex: 1;
+}
+
+.browse-button {
+  padding: 10px 14px;
+  border-radius: 6px;
+  border: 1px solid #cdb9a3;
+  background: #efe0cd;
+  cursor: pointer;
+}
+
+.browse-button:disabled {
+  cursor: not-allowed;
+}
+
+.status-icon {
+  margin-left: 6px;
+  font-weight: 700;
+  font-size: 10px;
+  line-height: 1;
+}
+
+.status-ok {
+  color: #1d7a37;
+}
+
+.status-bad {
+  color: #b42318;
+}
+
+.mods-summary {
+  display: block;
+}
+
+.mods-list {
+  margin-top: 10px;
+  max-height: 220px;
+  overflow-y: auto;
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid #cdb9a3;
+  background: #fff;
+}
+
+.server-mods-list {
+  margin-top: 8px;
+  max-height: 260px;
+  overflow-y: auto;
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid #b8c1a4;
+  background: rgba(255, 255, 255, 0.75);
+}
+
+.mod-row {
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.mod-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.mod-title-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.mod-row:last-child {
+  border-bottom: 0;
+}
+
+.mod-name {
+  font-weight: 400;
+  width: 200px;
+  flex: 0 0 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mod-tag {
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: capitalize;
+  line-height: 1.4;
+}
+
+.mod-tag-required {
+  background: rgba(155, 50, 22, 0.14);
+  color: #8b3117;
+}
+
+.mod-tag-local {
+  background: rgba(92, 76, 52, 0.14);
+  color: #5c4c34;
+}
+
+.mod-tag-ambient {
+  background: rgba(34, 123, 112, 0.14);
+  color: #1f6e65;
+}
+
+.mod-tag-util {
+  background: rgba(180, 126, 24, 0.16);
+  color: #946400;
+}
+
+.mod-tag-performance {
+  background: rgba(31, 101, 163, 0.14);
+  color: #1b5f98;
+}
+
+.mod-tag-extra {
+  background: rgba(116, 89, 38, 0.16);
+  color: #6b4f1c;
+}
+
+.mod-meta {
+  font-size: 12px;
+  color: #5d554c;
+  margin-top: 4px;
+}
+
+.installer-card {
+  margin-top: 20px;
+  padding: 20px;
+  border-radius: 10px;
+  background: #fff;
+  border: 1px solid #d6c8b8;
+  box-shadow: 0 10px 30px rgba(75, 52, 27, 0.08);
+}
+
+.app-error {
+  color: #b42318;
+}
+
+.flex {
+  display: flex;
+}
+
+.flex.jc {
+  justify-content: center;
+}
+
+.flex.ac {
+  align-items: center;
+}
+
+.optional-mods {
+  color: #706f6e;
+}
+
+.mr-2 {
+  margin-right: 4px;
+}
+
+@media (max-width: 800px) {
+  .app-grid {
+    grid-template-columns: 1fr;
+  }
+}

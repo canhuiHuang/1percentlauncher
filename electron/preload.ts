@@ -4,6 +4,12 @@ contextBridge.exposeInMainWorld("mc", {
   getSavedMinecraftDir: () => ipcRenderer.invoke("mc:getSavedMinecraftDir"),
   pickMinecraftDir: () => ipcRenderer.invoke("mc:pickMinecraftDir"),
   getProfiles: (dir: string) => ipcRenderer.invoke("mc:getProfiles", dir),
+  updateProfileName: (dir: string, profileId: string, profileName: string) =>
+    ipcRenderer.invoke("mc:updateProfileName", dir, profileId, profileName),
+  getRequiredForgeInfo: () => ipcRenderer.invoke("mc:getRequiredForgeInfo"),
+  getServerMods: () => ipcRenderer.invoke("mc:getServerMods"),
+  getInstalledMods: (dir: string, profileId: string) =>
+    ipcRenderer.invoke("mc:getInstalledMods", dir, profileId),
   installForgeClean: (dir: string) =>
     ipcRenderer.invoke("mc:installForgeClean", dir),
   installForgeIntoProfile: (dir: string, profileId: string) =>

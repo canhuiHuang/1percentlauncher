@@ -16,7 +16,11 @@ import {
   updateProfileJavaArgs,
   touchProfileLastUsed,
 } from "./services/profiles";
-import { readConfig, setMinecraftDir } from "./services/config";
+import {
+  readConfig,
+  setMinecraftDir,
+  setOnboardingDismissed,
+} from "./services/config";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -76,7 +80,9 @@ function sendForgeProgress(payload: InstallForgeProgress) {
 }
 
 function getRuntimeRootDir() {
-  return app.isPackaged ? path.dirname(process.execPath) : app.getPath("userData");
+  return app.isPackaged
+    ? path.dirname(process.execPath)
+    : app.getPath("userData");
 }
 
 function createWindow() {
@@ -169,12 +175,12 @@ async function getProfileById(mcDir: string, profileId: string) {
   return profile;
 }
 
-  async function getProfileModsDir(mcDir: string, profileId: string) {
-    const profile = await getProfileById(mcDir, profileId);
-    const profileDir = profile.gameDir?.trim() || mcDir;
+async function getProfileModsDir(mcDir: string, profileId: string) {
+  const profile = await getProfileById(mcDir, profileId);
+  const profileDir = profile.gameDir?.trim() || mcDir;
 
-    return path.join(profileDir, "mods");
-  }
+  return path.join(profileDir, "mods");
+}
 
 async function getProfileDir(mcDir: string, profileId: string) {
   const profile = await getProfileById(mcDir, profileId);
@@ -192,7 +198,11 @@ function readNbtString(buffer: Buffer, offset: number) {
   };
 }
 
-function parseNbtPayload(buffer: Buffer, offset: number, type: number): {
+function parseNbtPayload(
+  buffer: Buffer,
+  offset: number,
+  type: number
+): {
   tag: NbtTag;
   offset: number;
 } {
@@ -383,8 +393,7 @@ async function addServerToProfileIfMissing(mcDir: string, profileId: string) {
     return;
   }
 
-  const serverEntries =
-    serversTag?.type === 9 ? [...serversTag.value] : [];
+  const serverEntries = serversTag?.type === 9 ? [...serversTag.value] : [];
 
   serverEntries.push({
     type: 10,
@@ -593,7 +602,10 @@ function getDefaultProfileRamMb() {
   return Math.max(1024, Math.floor(getTotalSystemMemoryMb() / 2));
 }
 
-function buildJavaArgsWithRam(existingJavaArgs: string | undefined, ramMb: number) {
+function buildJavaArgsWithRam(
+  existingJavaArgs: string | undefined,
+  ramMb: number
+) {
   const ramArg = ramMb % 1024 === 0 ? `-Xmx${ramMb / 1024}G` : `-Xmx${ramMb}M`;
   const normalizedArgs = (existingJavaArgs ?? "").trim();
 
@@ -629,7 +641,26 @@ app.whenReady().then(() => {
       return config.minecraftDir;
     }
 
-    return getDefaultMinecraftDir();
+    const defaultDir = getDefaultMinecraftDir();
+
+    if (!(await pathExists(defaultDir))) {
+      await dialog.showMessageBox({
+        type: "warning",
+        title: "Minecraft Directory Not Found",
+        message:
+          "Minecraft default directory not found. Either install the game or insert a Minecraft directory.",
+      });
+    }
+
+    return defaultDir;
+  });
+
+  ipcMain.handle("mc:getAppConfig", async () => {
+    return readConfig();
+  });
+
+  ipcMain.handle("mc:dismissOnboarding", async () => {
+    return setOnboardingDismissed();
   });
 
   ipcMain.handle(
@@ -674,10 +705,13 @@ app.whenReady().then(() => {
     return getTotalSystemMemoryMb();
   });
 
-  ipcMain.handle("mc:openProfileFolder", async (_e, mcDir: string, profileId: string) => {
-    const profileDir = await getProfileDir(mcDir, profileId);
-    await shell.openPath(profileDir);
-  });
+  ipcMain.handle(
+    "mc:openProfileFolder",
+    async (_e, mcDir: string, profileId: string) => {
+      const profileDir = await getProfileDir(mcDir, profileId);
+      await shell.openPath(profileDir);
+    }
+  );
 
   ipcMain.handle(
     "mc:updateProfileName",
@@ -930,7 +964,9 @@ app.whenReady().then(() => {
         sendForgeProgress({
           stage: "downloading",
           percent,
-          message: `Downloading ${download.name} (${index + 1}/${downloads.length})... ${percent}%`,
+          message: `Downloading ${download.name} (${index + 1}/${
+            downloads.length
+          })... ${percent}%`,
         });
       });
 
@@ -968,7 +1004,9 @@ app.whenReady().then(() => {
           extraMods.length > 0
             ? Math.round(((index + 1) / extraMods.length) * 100)
             : 100,
-        message: `Removed extra mod ${mod.name} (${index + 1}/${extraMods.length}).`,
+        message: `Removed extra mod ${mod.name} (${index + 1}/${
+          extraMods.length
+        }).`,
       });
     }
   }
@@ -1097,19 +1135,63 @@ app.whenReady().then(() => {
   );
 
   ipcMain.handle("mc:installForgeClean", async (_e, mcDir: string) => {
+    let gameDir: string | undefined;
+
+    const locationChoice = await dialog.showMessageBox({
+      type: "question",
+      title: "Clean Installation Location",
+      message:
+        "Do you want to create the new profile in a different folder?\nRecommended so it does not affect the mods in .minecraft.\nE.G: Desktop/mynewProfile/",
+      buttons: [
+        "Choose Different Folder (Recommended)",
+        "Use .minecraft",
+        "Cancel",
+      ],
+      cancelId: 2,
+      defaultId: 0,
+    });
+
+    if (locationChoice.response === 2) {
+      return {
+        success: false,
+        cancelled: true,
+        profileId: "",
+        forgeVersionId: result.forgeVersionId,
+        fileName: result.fileName,
+        localJarPath: result.localJarPath,
+      };
+    }
+
+    if (locationChoice.response === 0) {
+      const folderSelection = await dialog.showOpenDialog({
+        title: "Select a folder for the new profile",
+        properties: ["openDirectory", "createDirectory"],
+      });
+
+      if (folderSelection.canceled || folderSelection.filePaths.length === 0) {
+        return {
+          success: false,
+          cancelled: true,
+          profileId: "",
+          forgeVersionId: result.forgeVersionId,
+          fileName: result.fileName,
+          localJarPath: result.localJarPath,
+        };
+      }
+
+      gameDir = folderSelection.filePaths[0];
+    }
+
     const result = await installForgeFromBackend(mcDir);
 
     const profileId = await createProfileForVersion(
       mcDir,
       `Forge ${result.forgeVersionId.replace(/^forge-/, "")}`,
-      result.forgeVersionId
+      result.forgeVersionId,
+      gameDir
     );
 
-    sendForgeProgress({
-      stage: "done",
-      percent: 100,
-      message: "Forge installed successfully in a new profile.",
-    });
+    await updateSelectedProfile(mcDir, profileId, false);
 
     return {
       success: true,

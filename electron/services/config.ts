@@ -38,3 +38,14 @@ export async function setMinecraftDir(
   await writeConfig(next);
   return next;
 }
+
+export async function setOnboardingDismissed(): Promise<AppConfig> {
+  const current = await readConfig();
+  const next: AppConfig = {
+    ...current,
+    onboardingDismissed: true,
+  };
+
+  await writeConfig(next);
+  return next;
+}

@@ -10,8 +10,14 @@ type McProfile = {
   lastUsed?: string;
 };
 
+type AppConfig = {
+  minecraftDir?: string;
+  onboardingDismissed?: boolean;
+};
+
 type ForgeInstallResult = {
   success: boolean;
+  cancelled?: boolean;
   profileId: string;
   forgeVersionId: string;
   fileName: string;
@@ -48,6 +54,8 @@ type ForgeInstallProgress = {
 declare global {
   interface Window {
     mc: {
+      getAppConfig: () => Promise<AppConfig>;
+      dismissOnboarding: () => Promise<AppConfig>;
       getSavedMinecraftDir: () => Promise<string>;
       setWindowContentSize: (width: number, height: number) => Promise<void>;
       getSystemMemoryMb: () => Promise<number>;

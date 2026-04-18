@@ -3,6 +3,52 @@ body {
   margin: 0;
 }
 
+.onboarding-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 16, 12, 0.38);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.onboarding-modal {
+  width: 360px;
+  padding: 28px 24px;
+  border-radius: 14px;
+  background: #fffaf1;
+  border: 1px solid #d6c8b8;
+  box-shadow: 0 18px 50px rgba(51, 36, 18, 0.2);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.onboarding-title {
+  margin: 0 0 8px;
+}
+
+.onboarding-install-button {
+  width: 100%;
+  min-height: 72px;
+  border: 1px solid #cdb9a3;
+  border-radius: 10px;
+  background: #efe0cd;
+  font-size: 24px;
+  cursor: pointer;
+}
+
+.onboarding-existing-button {
+  border: 0;
+  background: transparent;
+  color: #6b4f1c;
+  font-size: 13px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 .app-shell {
   padding: 20px;
   font-family: Arial, sans-serif;

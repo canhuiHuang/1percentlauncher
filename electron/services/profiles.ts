@@ -96,7 +96,8 @@ function nowIso(): string {
 export async function createProfileForVersion(
   mcDir: string,
   profileName: string,
-  versionId: string
+  versionId: string,
+  gameDir?: string
 ): Promise<string> {
   const data = await readLauncherProfilesFile(mcDir);
 
@@ -109,6 +110,7 @@ export async function createProfileForVersion(
 
   data.profiles[profileId] = {
     name: profileName,
+    gameDir,
     lastVersionId: versionId,
     lastUsed: now,
     created: now,

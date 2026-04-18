@@ -119,9 +119,10 @@ export default function App() {
   const [profileHasServerIp, setProfileHasServerIp] = useState(false);
   const [isLoadingProfileServerIp, setIsLoadingProfileServerIp] =
     useState(false);
-  const [removeUnusedMods, setRemoveUnusedMods] = useState(false);
+  const [removeUnusedMods, setRemoveUnusedMods] = useState(true);
   const [isLaunchingGame, setIsLaunchingGame] = useState(false);
   const [playFeedback, setPlayFeedback] = useState("");
+  const [showOnboarding, setShowOnboarding] = useState(false);
   const [progress, setProgress] = useState<ForgeInstallProgress>({
     stage: "searching",
     percent: 0,
@@ -245,12 +246,14 @@ export default function App() {
   useEffect(() => {
     async function loadInitialDir() {
       try {
-        const [savedDir, totalMemoryMb] = await Promise.all([
+        const [savedDir, totalMemoryMb, config] = await Promise.all([
           window.mc.getSavedMinecraftDir(),
           window.mc.getSystemMemoryMb(),
+          window.mc.getAppConfig(),
         ]);
         setDir(savedDir);
         setSystemMemoryMb(totalMemoryMb);
+        setShowOnboarding(!config.onboardingDismissed);
       } catch {
         setError("Failed to load Minecraft directory.");
       }
@@ -433,6 +436,7 @@ export default function App() {
     try {
       setError("");
       setPlayFeedback("");
+      setShowOnboarding(false);
       setIsInstalling(true);
       setProgress({
         stage: "searching",
@@ -441,6 +445,14 @@ export default function App() {
       });
 
       const result = await window.mc.installForgeClean(dir);
+      if (result.cancelled) {
+        setProgress({
+          stage: "searching",
+          percent: 0,
+          message: "Clean installation cancelled.",
+        });
+        return;
+      }
       const updatedProfiles = await reloadProfiles();
       const createdProfileStillExists = updatedProfiles.some(
         (profile) => profile.id === result.profileId
@@ -458,6 +470,15 @@ export default function App() {
       });
     } finally {
       setIsInstalling(false);
+    }
+  }
+
+  async function dismissOnboarding() {
+    try {
+      await window.mc.dismissOnboarding();
+      setShowOnboarding(false);
+    } catch {
+      setShowOnboarding(false);
     }
   }
 
@@ -602,6 +623,27 @@ export default function App() {
 
   return (
     <div className="app-shell">
+      {showOnboarding ? (
+        <div className="onboarding-overlay">
+          <div className="onboarding-modal">
+            <h3 className="onboarding-title">1Percent Launcher</h3>
+            <button
+              className="onboarding-install-button"
+              onClick={() => void handleCleanInstall()}
+              disabled={isInstalling}
+            >
+              Install mods
+            </button>
+            <button
+              className="onboarding-existing-button"
+              onClick={() => void dismissOnboarding()}
+              disabled={isInstalling}
+            >
+              Install in existing profile
+            </button>
+          </div>
+        </div>
+      ) : null}
       <div className="app-container">
         <div className="app-grid">
           <section className="panel settings-panel">
@@ -654,7 +696,7 @@ export default function App() {
                 disabled={isInstalling || !dir || !selectedProfileId}
                 title="Open selected profile folder"
               >
-                Open
+                📂
               </button>
             </div>
 

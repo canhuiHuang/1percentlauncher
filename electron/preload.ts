@@ -1,6 +1,8 @@
 import { contextBridge, ipcRenderer } from "electron";
 
 contextBridge.exposeInMainWorld("mc", {
+  getAppConfig: () => ipcRenderer.invoke("mc:getAppConfig"),
+  dismissOnboarding: () => ipcRenderer.invoke("mc:dismissOnboarding"),
   getSavedMinecraftDir: () => ipcRenderer.invoke("mc:getSavedMinecraftDir"),
   setWindowContentSize: (width: number, height: number) =>
     ipcRenderer.invoke("mc:setWindowContentSize", width, height),

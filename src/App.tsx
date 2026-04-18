@@ -478,6 +478,9 @@ export default function App() {
       setPlayFeedback("");
       setShowOnboarding(false);
       setIsInstalling(true);
+      setSelectedProfileId("");
+      setInstalledMods([]);
+      setProfileHasServerIp(false);
       setProgress({
         stage: "searching",
         percent: 0,
@@ -519,6 +522,9 @@ export default function App() {
       setPlayFeedback("");
       setShowOnboarding(false);
       setIsInstalling(true);
+      setSelectedProfileId("");
+      setInstalledMods([]);
+      setProfileHasServerIp(false);
       setProgress({
         stage: "searching",
         percent: 0,
@@ -848,7 +854,7 @@ export default function App() {
               )}
             </div>
 
-            <div>
+            <div className="mt-4">
               <div className="flex ac">
                 <div className="field-label mr-2">
                   <strong>Required Mods Installed:</strong>{" "}
@@ -862,7 +868,7 @@ export default function App() {
               </div>
               <div className="flex ac">
                 <div className="field-label mr-2">
-                  <strong>Optional Mods Installed:</strong>
+                  <span>Optional Mods Installed:</span>
                 </div>
                 <span>
                   {installedOptionalModsCount} / {optionalServerModsCount}{" "}
@@ -948,7 +954,9 @@ export default function App() {
         <div className="installer-card">
           <div className="installer-progress">
             <div>
-              {isLoadingRequiredForgeVersion || isLoadingServerMods ? (
+              {isInstalling ? (
+                <div>{progress.message || "Installing Forge and mods..."}</div>
+              ) : isLoadingRequiredForgeVersion || isLoadingServerMods ? (
                 <div>Checking whether the profile is up to date...</div>
               ) : !selectedProfile ? (
                 <div>Select a profile to check its status.</div>

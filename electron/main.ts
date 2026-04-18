@@ -94,7 +94,7 @@ function getRuntimeRootDir() {
 function createWindow() {
   win = new BrowserWindow({
     width: 960,
-    height: 800,
+    height: 730,
     useContentSize: true,
     resizable: false,
     maximizable: false,

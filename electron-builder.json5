@@ -19,6 +19,7 @@
   },
   "win": {
     "executableName": "1PercentLauncher",
+    "signAndEditExecutable": false,
     "target": [
       {
         "target": "dir",

@@ -23,6 +23,6 @@ if (await pathExists(targetDir)) {
   await fs.rm(targetDir, { recursive: true, force: true });
 }
 
-await fs.rename(unpackedDir, targetDir);
+await fs.cp(unpackedDir, targetDir, { recursive: true });
 await fs.mkdir(path.join(targetDir, "downloads"), { recursive: true });
 await fs.mkdir(path.join(targetDir, "temp"), { recursive: true });

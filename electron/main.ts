@@ -5,7 +5,7 @@ import os from "node:os";
 import fs from "node:fs/promises";
 import { createWriteStream } from "node:fs";
 import { spawn } from "node:child_process";
-import { gunzipSync, gzipSync } from "node:zlib";
+import { gunzipSync } from "node:zlib";
 import dotenv from "dotenv";
 import { getDefaultMinecraftDir } from "./services/minecraftPaths";
 import {
@@ -73,6 +73,7 @@ type InstallForgeProgress =
 type RequiredForgeInfo = {
   fileName: string;
   forgeVersionId: string;
+  serverIp: string;
   downloadUrl?: string;
 };
 
@@ -530,6 +531,25 @@ function readServersFile(raw: Buffer) {
   }
 }
 
+function hasVisibleServerEntry(
+  rootValue: Record<string, NbtTag>,
+  serverIp: string
+) {
+  const serversTag = rootValue.servers;
+
+  return (
+    serversTag?.type === 9 &&
+    serversTag.value.some(
+      (entry) =>
+        entry.type === 10 &&
+        entry.value.ip?.type === 8 &&
+        entry.value.ip.value.trim().toLowerCase() === serverIp.toLowerCase() &&
+        entry.value.hidden?.type === 1 &&
+        entry.value.hidden.value === 0
+    )
+  );
+}
+
 async function getServerIpFromBackend() {
   const res = await fetch(BACKEND_BASE_URL + "/mc/server-ip");
 
@@ -548,47 +568,60 @@ async function getServerIpFromBackend() {
   return data.ip.trim();
 }
 
-async function addServerToProfileIfMissing(mcDir: string, profileId: string) {
-  const profileDir = await getProfileDir(mcDir, profileId);
-  const serversPath = path.join(profileDir, "servers.dat");
-  const serverIp = await getServerIpFromBackend();
+async function addServerEntryIfMissing(targetDir: string, serverIp: string) {
+  const serversPath = path.join(targetDir, "servers.dat");
   const serverName = "1Percent Server";
 
   let rootName = "";
   let rootValue: Record<string, NbtTag> = {};
-  let isCompressed = true;
+  let shouldRewriteFile = false;
 
   if (await pathExists(serversPath)) {
     const raw = await fs.readFile(serversPath);
     const readResult = readServersFile(raw);
     rootName = readResult.parsed.name;
     rootValue = readResult.parsed.value;
-    isCompressed = readResult.isCompressed;
+    shouldRewriteFile = readResult.isCompressed;
   }
 
   const serversTag = rootValue.servers;
+  const existingEntry =
+    serversTag?.type === 9
+      ? serversTag.value.find(
+          (entry) =>
+            entry.type === 10 &&
+            entry.value.ip?.type === 8 &&
+            entry.value.ip.value.trim().toLowerCase() === serverIp.toLowerCase()
+        )
+      : undefined;
 
-  if (
-    serversTag?.type === 9 &&
-    serversTag.value.some(
-      (entry) =>
-        entry.type === 10 &&
-        entry.value.ip?.type === 8 &&
-        entry.value.ip.value.trim().toLowerCase() === serverIp.toLowerCase()
-    )
-  ) {
-    return;
+  if (existingEntry?.type === 10) {
+    const hasVisibleHiddenFlag =
+      existingEntry.value.hidden?.type === 1 &&
+      existingEntry.value.hidden.value === 0;
+
+    if (!hasVisibleHiddenFlag) {
+      existingEntry.value.hidden = { type: 1, value: 0 };
+      shouldRewriteFile = true;
+    }
+
+    if (!shouldRewriteFile) {
+      return;
+    }
   }
 
   const serverEntries = serversTag?.type === 9 ? [...serversTag.value] : [];
 
-  serverEntries.push({
-    type: 10,
-    value: {
-      name: { type: 8, value: serverName },
-      ip: { type: 8, value: serverIp },
-    },
-  });
+  if (!existingEntry) {
+    serverEntries.push({
+      type: 10,
+      value: {
+        hidden: { type: 1, value: 0 },
+        name: { type: 8, value: serverName },
+        ip: { type: 8, value: serverIp },
+      },
+    });
+  }
 
   rootValue.servers = {
     type: 9,
@@ -602,7 +635,18 @@ async function addServerToProfileIfMissing(mcDir: string, profileId: string) {
     writeNbtPayload({ type: 10, value: rootValue }),
   ]);
 
-  await fs.writeFile(serversPath, isCompressed ? gzipSync(encoded) : encoded);
+  await fs.writeFile(serversPath, encoded);
+}
+
+async function addServerToProfileIfMissing(mcDir: string, profileId: string) {
+  const profileDir = await getProfileDir(mcDir, profileId);
+  const serverIp = await getServerIpFromBackend();
+
+  await addServerEntryIfMissing(profileDir, serverIp);
+
+  if (path.resolve(profileDir) !== path.resolve(mcDir)) {
+    await addServerEntryIfMissing(mcDir, serverIp);
+  }
 }
 
 async function profileHasServerIp(mcDir: string, profileId: string) {
@@ -615,18 +659,13 @@ async function profileHasServerIp(mcDir: string, profileId: string) {
 
   const serverIp = await getServerIpFromBackend();
   const raw = await fs.readFile(serversPath);
-  const parsed = readServersFile(raw).parsed;
-  const serversTag = parsed.value.servers;
+  const readResult = readServersFile(raw);
 
-  return (
-    serversTag?.type === 9 &&
-    serversTag.value.some(
-      (entry) =>
-        entry.type === 10 &&
-        entry.value.ip?.type === 8 &&
-        entry.value.ip.value.trim().toLowerCase() === serverIp.toLowerCase()
-    )
-  );
+  if (readResult.isCompressed) {
+    return false;
+  }
+
+  return hasVisibleServerEntry(readResult.parsed.value, serverIp);
 }
 
 async function runForgeInstaller(jarPath: string, minecraftDir: string) {
@@ -921,12 +960,14 @@ app.whenReady().then(() => {
 
   async function getRequiredForgeInfo(): Promise<RequiredForgeInfo> {
     const forgeInfo = await getForgeInfoFromBackend();
+    const serverIp = await getServerIpFromBackend();
 
     return {
       fileName: forgeInfo.fileName,
       forgeVersionId: getForgeVersionIdFromInstallerFileName(
         forgeInfo.fileName
       ),
+      serverIp,
       downloadUrl: forgeInfo.downloadUrl,
     };
   }

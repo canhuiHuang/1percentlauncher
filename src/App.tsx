@@ -32,7 +32,7 @@ const PROFILE_ICON_EMOJIS: Record<string, string> = {
   Nether_Star: "⭐",
 };
 
-const APP_VERSION = "0.0.0";
+const APP_VERSION = "0.0.2";
 
 function normalizeModName(name: string): string {
   return name.trim().toLowerCase();
@@ -125,10 +125,12 @@ export default function App() {
   const [error, setError] = useState("");
   const [isInstalling, setIsInstalling] = useState(false);
   const [requiredForgeVersionId, setRequiredForgeVersionId] = useState("");
+  const [serverIp, setServerIp] = useState("");
   const [isLoadingRequiredForgeVersion, setIsLoadingRequiredForgeVersion] =
     useState(true);
   const [serverMods, setServerMods] = useState<ServerModInfo[]>([]);
   const [isLoadingServerMods, setIsLoadingServerMods] = useState(true);
+  const [copyServerIpLabel, setCopyServerIpLabel] = useState("COPY");
   const [installedMods, setInstalledMods] = useState<InstalledModInfo[]>([]);
   const [isLoadingInstalledMods, setIsLoadingInstalledMods] = useState(false);
   const [profileNameInput, setProfileNameInput] = useState("");
@@ -149,6 +151,23 @@ export default function App() {
     stage: "searching",
     percent: 0,
     message: "",
+  });
+  const [appUpdateState, setAppUpdateState] = useState<{
+    status:
+      | "idle"
+      | "disabled"
+      | "checking"
+      | "available"
+      | "downloading"
+      | "downloaded"
+      | "up-to-date"
+      | "error";
+    message: string;
+    progress: number | null;
+  }>({
+    status: "idle",
+    message: "",
+    progress: null,
   });
   const hasPromptedForUpdateRef = useRef(false);
   const hasPromptedToInstallUpdateRef = useRef(false);
@@ -197,7 +216,7 @@ export default function App() {
       message: string;
       progress: number | null;
     }) {
-      void payload.progress;
+      setAppUpdateState(payload);
 
       if (payload.status === "available" && !hasPromptedForUpdateRef.current) {
         hasPromptedForUpdateRef.current = true;
@@ -251,6 +270,27 @@ export default function App() {
 
   const optionalServerModsCount = serverMods.length - requiredServerModsCount;
 
+  const appUpdateSummary =
+    appUpdateState.status === "checking"
+      ? "Checking for launcher updates..."
+      : appUpdateState.status === "downloading"
+      ? `Downloading launcher update${
+          appUpdateState.progress != null
+            ? ` (${Math.round(appUpdateState.progress)}%)`
+            : "..."
+        }`
+      : appUpdateState.status === "available"
+      ? "Launcher update available"
+      : appUpdateState.status === "downloaded"
+      ? "Launcher update ready to install"
+      : appUpdateState.status === "up-to-date"
+      ? "Launcher is up to date"
+      : appUpdateState.status === "error"
+      ? "Launcher update check failed"
+      : appUpdateState.status === "disabled"
+      ? "Launcher updates disabled in development build"
+      : "Launcher update status idle";
+
   const installedModNames = useMemo(
     () => new Set(installedMods.map((mod) => normalizeModName(mod.name))),
     [installedMods]
@@ -289,11 +329,21 @@ export default function App() {
     }, 0);
   }, [installedModNames, serverMods]);
 
+  const selectedProfileHasServerIp =
+    !!selectedProfile && !isLoadingProfileServerIp && profileHasServerIp;
+  const hasRequiredModsInstalled =
+    installedRequiredModsCount === requiredServerModsCount;
+  const isOnlyMissingServerIp =
+    !!selectedProfile &&
+    versionMatches &&
+    hasRequiredModsInstalled &&
+    !selectedProfileHasServerIp;
+
   const isProfileUpToDate =
     !!selectedProfile &&
     versionMatches &&
-    installedRequiredModsCount === requiredServerModsCount &&
-    profileHasServerIp;
+    hasRequiredModsInstalled &&
+    selectedProfileHasServerIp;
   const isLoadingServerInfo =
     isLoadingRequiredForgeVersion || isLoadingServerMods;
   const isServerInfoUnavailable =
@@ -393,11 +443,13 @@ export default function App() {
         if (!isActive) return;
 
         setRequiredForgeVersionId(forgeInfo.forgeVersionId);
+        setServerIp(forgeInfo.serverIp);
         setServerMods(mods);
       } catch {
         if (!isActive) return;
 
         setRequiredForgeVersionId("");
+        setServerIp("");
         setServerMods([]);
       } finally {
         if (isActive) {
@@ -436,6 +488,33 @@ export default function App() {
 
     void loadProfiles();
   }, [dir, mc]);
+
+  useEffect(() => {
+    if (copyServerIpLabel === "COPY") {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setCopyServerIpLabel("COPY");
+    }, 1800);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [copyServerIpLabel]);
+
+  async function handleCopyServerIp() {
+    if (!serverIp) {
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(serverIp);
+      setCopyServerIpLabel("COPIED");
+    } catch {
+      setCopyServerIpLabel("FAILED");
+    }
+  }
 
   useEffect(() => {
     if (!mc || !dir || !selectedProfileId) {
@@ -483,6 +562,7 @@ export default function App() {
 
     async function loadProfileServerIpStatus() {
       try {
+        setProfileHasServerIp(false);
         setIsLoadingProfileServerIp(true);
         const hasServerIp = await mc.profileHasServerIp(dir, selectedProfileId);
 
@@ -1030,6 +1110,24 @@ export default function App() {
                 ? "🌐 Server Info (Unable to reach server)"
                 : "🌐 Server Info"}
             </h2>
+            <div className="server-ip-card">
+              <div className="server-ip-label">Server IP</div>
+              <div className="server-ip-row">
+                <div className="server-ip-value">
+                  {isLoadingRequiredForgeVersion
+                    ? "Checking server IP..."
+                    : serverIp || "Unavailable"}
+                </div>
+                <button
+                  type="button"
+                  className="server-ip-copy-button"
+                  onClick={() => void handleCopyServerIp()}
+                  disabled={isLoadingRequiredForgeVersion || !serverIp}
+                >
+                  {copyServerIpLabel}
+                </button>
+              </div>
+            </div>
             <div className="flex">
               <strong className="field-label">Version: </strong>
               <div>
@@ -1074,6 +1172,11 @@ export default function App() {
                 <div>Checking installed mods and server info...</div>
               ) : isProfileUpToDate ? (
                 <div>Your profile is up to date with server mods! ✅</div>
+              ) : isOnlyMissingServerIp ? (
+                <div>
+                  Your profile is missing the server in the multiplayer list.
+                  Press Update to add it. ❌
+                </div>
               ) : (
                 <div>Your profile is not up to date with server mods. ❌</div>
               )}
@@ -1170,6 +1273,15 @@ export default function App() {
             >
               {isProfileUpToDate ? "OPEN" : "Update"}
             </button>
+          </div>
+        </div>
+
+        <div
+          className={`update-status-bar update-status-${appUpdateState.status}`}
+        >
+          {/* <div className="update-status-summary">{appUpdateSummary}</div> */}
+          <div className="update-status-message">
+            {appUpdateState.message || " "}
           </div>
         </div>
 

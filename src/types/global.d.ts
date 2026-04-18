@@ -34,6 +34,7 @@ type ForgeInstallResult = {
 type RequiredForgeInfo = {
   fileName: string;
   forgeVersionId: string;
+  serverIp: string;
   downloadUrl?: string;
 };
 

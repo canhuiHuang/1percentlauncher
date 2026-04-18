@@ -42,6 +42,18 @@
     "appId": "com.onepercent.1percentlauncher",
     "productName": "1percent launcher",
     "icon": "icon.ico",
+    "files": [
+      "dist/**",
+      "dist-electron/**",
+      "package.json",
+      "icon.ico"
+    ],
+    "extraFiles": [
+      {
+        "from": ".env",
+        "to": ".env"
+      }
+    ],
     "win": {
       "target": "nsis",
       "icon": "icon.ico"
@@ -49,7 +61,9 @@
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "perMachine": false
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "shortcutName": "1percent launcher"
     },
     "publish": [
       {

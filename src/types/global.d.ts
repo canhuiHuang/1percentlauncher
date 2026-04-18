@@ -5,6 +5,8 @@ type McProfile = {
   name: string;
   gameDir?: string;
   lastVersionId?: string;
+  javaArgs?: string;
+  ramInitialized?: boolean;
   lastUsed?: string;
 };
 
@@ -47,9 +49,16 @@ declare global {
   interface Window {
     mc: {
       getSavedMinecraftDir: () => Promise<string>;
+      getSystemMemoryMb: () => Promise<number>;
       pickMinecraftDir: () => Promise<string | null>;
       getProfiles: (dir: string) => Promise<McProfile[]>;
+      profileHasServerIp: (dir: string, profileId: string) => Promise<boolean>;
       openProfileFolder: (dir: string, profileId: string) => Promise<void>;
+      updateProfileRamMb: (
+        dir: string,
+        profileId: string,
+        ramMb: number
+      ) => Promise<void>;
       updateProfileName: (
         dir: string,
         profileId: string,

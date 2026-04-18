@@ -3,6 +3,8 @@ export type McProfile = {
   name: string;
   gameDir?: string;
   lastVersionId?: string;
+  javaArgs?: string;
+  ramInitialized?: boolean;
   lastUsed?: string;
   icon?: string;
   created?: string;
@@ -16,6 +18,8 @@ export type LauncherProfilesFile = {
       name?: string;
       gameDir?: string;
       lastVersionId?: string;
+      javaArgs?: string;
+      ramInitialized?: boolean;
       lastUsed?: string;
       icon?: string;
       created?: string;

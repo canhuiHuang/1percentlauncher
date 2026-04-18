@@ -25,6 +25,44 @@ function formatForgeVersion(versionId: string): string {
   return versionId.replace(/^forge-/, "Forge ");
 }
 
+function parseRamMbFromJavaArgs(javaArgs?: string): number | null {
+  if (!javaArgs) {
+    return null;
+  }
+
+  const match = javaArgs.match(/-Xmx(\d+)([mMgG])\b/);
+
+  if (!match) {
+    return null;
+  }
+
+  const amount = Number(match[1]);
+
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return null;
+  }
+
+  return match[2].toLowerCase() === "g" ? amount * 1024 : amount;
+}
+
+function buildJavaArgsPreview(existingJavaArgs: string | undefined, ramMb: number) {
+  const baseArgs = (existingJavaArgs ?? "")
+    .replace(/-Xmx\d+[mMgG]\b/g, "")
+    .replace(/-Xms\d+[mMgG]\b/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return [`-Xmx${ramMb}M`, `-Xms${ramMb}M`, baseArgs]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
+}
+
+function formatRamLabel(ramMb: number) {
+  const ramGb = ramMb / 1024;
+  return Number.isInteger(ramGb) ? `${ramGb} GB` : `${ramGb.toFixed(1)} GB`;
+}
+
 function getMatchStatusIcon(matches: boolean) {
   return (
     <span className={`status-icon ${matches ? "status-ok" : "status-bad"}`}>
@@ -71,6 +109,11 @@ export default function App() {
   const [installedMods, setInstalledMods] = useState<InstalledModInfo[]>([]);
   const [isLoadingInstalledMods, setIsLoadingInstalledMods] = useState(false);
   const [profileNameInput, setProfileNameInput] = useState("");
+  const [systemMemoryMb, setSystemMemoryMb] = useState(2048);
+  const [profileRamMb, setProfileRamMb] = useState(1024);
+  const [profileHasServerIp, setProfileHasServerIp] = useState(false);
+  const [isLoadingProfileServerIp, setIsLoadingProfileServerIp] =
+    useState(false);
   const [progress, setProgress] = useState<ForgeInstallProgress>({
     stage: "searching",
     percent: 0,
@@ -83,6 +126,12 @@ export default function App() {
   useEffect(() => {
     setProfileNameInput(selectedProfile?.name ?? "");
   }, [selectedProfile?.id, selectedProfile?.name]);
+
+  useEffect(() => {
+    const defaultRamMb = Math.max(1024, Math.floor(systemMemoryMb / 2));
+    const configuredRamMb = parseRamMbFromJavaArgs(selectedProfile?.javaArgs);
+    setProfileRamMb(configuredRamMb ?? defaultRamMb);
+  }, [selectedProfile?.id, selectedProfile?.javaArgs, systemMemoryMb]);
 
   useEffect(() => {
     const unsubscribe = window.mc.onForgeInstallProgress((payload) => {
@@ -150,7 +199,8 @@ export default function App() {
   const isProfileUpToDate =
     !!selectedProfile &&
     versionMatches &&
-    installedRequiredModsCount === requiredServerModsCount;
+    installedRequiredModsCount === requiredServerModsCount &&
+    profileHasServerIp;
 
   const installedModListItems = useMemo<ModListItem[]>(
     () =>
@@ -187,8 +237,12 @@ export default function App() {
   useEffect(() => {
     async function loadInitialDir() {
       try {
-        const savedDir = await window.mc.getSavedMinecraftDir();
+        const [savedDir, totalMemoryMb] = await Promise.all([
+          window.mc.getSavedMinecraftDir(),
+          window.mc.getSystemMemoryMb(),
+        ]);
         setDir(savedDir);
+        setSystemMemoryMb(totalMemoryMb);
       } catch {
         setError("Failed to load Minecraft directory.");
       }
@@ -292,6 +346,44 @@ export default function App() {
     };
   }, [dir, selectedProfileId]);
 
+  useEffect(() => {
+    if (!dir || !selectedProfileId) {
+      setProfileHasServerIp(false);
+      setIsLoadingProfileServerIp(false);
+      return;
+    }
+
+    let isActive = true;
+
+    async function loadProfileServerIpStatus() {
+      try {
+        setIsLoadingProfileServerIp(true);
+        const hasServerIp = await window.mc.profileHasServerIp(
+          dir,
+          selectedProfileId
+        );
+
+        if (!isActive) return;
+
+        setProfileHasServerIp(hasServerIp);
+      } catch {
+        if (!isActive) return;
+
+        setProfileHasServerIp(false);
+      } finally {
+        if (isActive) {
+          setIsLoadingProfileServerIp(false);
+        }
+      }
+    }
+
+    void loadProfileServerIpStatus();
+
+    return () => {
+      isActive = false;
+    };
+  }, [dir, selectedProfileId]);
+
   async function chooseFolder() {
     try {
       setError("");
@@ -380,8 +472,12 @@ export default function App() {
         await reloadProfiles();
       }
 
-      const mods = await window.mc.getInstalledMods(dir, selectedProfileId);
+      const [mods, hasServerIp] = await Promise.all([
+        window.mc.getInstalledMods(dir, selectedProfileId),
+        window.mc.profileHasServerIp(dir, selectedProfileId),
+      ]);
       setInstalledMods(mods);
+      setProfileHasServerIp(hasServerIp);
       setProgress({
         stage: "done",
         percent: 100,
@@ -441,6 +537,29 @@ export default function App() {
       await window.mc.openProfileFolder(dir, selectedProfileId);
     } catch {
       setError("Failed to open profile folder.");
+    }
+  }
+
+  async function saveProfileRamMb(ramMb: number) {
+    if (!dir || !selectedProfileId) {
+      return;
+    }
+
+    try {
+      setError("");
+      await window.mc.updateProfileRamMb(dir, selectedProfileId, ramMb);
+      setProfiles((prev) =>
+        prev.map((profile) =>
+          profile.id === selectedProfileId
+            ? {
+                ...profile,
+                javaArgs: buildJavaArgsPreview(profile.javaArgs, ramMb),
+              }
+            : profile
+        )
+      );
+    } catch {
+      setError("Failed to update profile RAM.");
     }
   }
 
@@ -614,8 +733,8 @@ export default function App() {
                 <div>Checking whether the profile is up to date...</div>
               ) : !selectedProfile ? (
                 <div>Select a profile to check its status.</div>
-              ) : isLoadingInstalledMods ? (
-                <div>Checking installed mods...</div>
+              ) : isLoadingInstalledMods || isLoadingProfileServerIp ? (
+                <div>Checking installed mods and server info...</div>
               ) : isProfileUpToDate ? (
                 <div>Your profile is up to date with server mods! ✅</div>
               ) : (
@@ -623,6 +742,41 @@ export default function App() {
               )}
             </div>
             <ProgressBar progress={progress} />
+            <div className="ram-control">
+              <div className="ram-control-header">
+                <strong>Profile RAM</strong>
+                <span>{formatRamLabel(profileRamMb)}</span>
+              </div>
+              <input
+                className="ram-slider"
+                type="range"
+                min={1024}
+                max={Math.max(1024, systemMemoryMb)}
+                step={512}
+                value={profileRamMb}
+                onChange={(e) => setProfileRamMb(Number(e.target.value))}
+                onPointerUp={(e) =>
+                  void saveProfileRamMb(Number((e.target as HTMLInputElement).value))
+                }
+                onMouseUp={(e) =>
+                  void saveProfileRamMb(Number((e.target as HTMLInputElement).value))
+                }
+                onTouchEnd={(e) =>
+                  void saveProfileRamMb(Number((e.target as HTMLInputElement).value))
+                }
+                onKeyUp={(e) =>
+                  void saveProfileRamMb(Number((e.target as HTMLInputElement).value))
+                }
+                onBlur={(e) =>
+                  void saveProfileRamMb(Number((e.target as HTMLInputElement).value))
+                }
+                disabled={isInstalling || !dir || !selectedProfileId}
+              />
+              <div className="ram-control-scale">
+                <span>1 GB</span>
+                <span>{formatRamLabel(Math.max(1024, systemMemoryMb))}</span>
+              </div>
+            </div>
           </div>
           <div className="actions">
             <button

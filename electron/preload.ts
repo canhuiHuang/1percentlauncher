@@ -2,10 +2,15 @@ import { contextBridge, ipcRenderer } from "electron";
 
 contextBridge.exposeInMainWorld("mc", {
   getSavedMinecraftDir: () => ipcRenderer.invoke("mc:getSavedMinecraftDir"),
+  getSystemMemoryMb: () => ipcRenderer.invoke("mc:getSystemMemoryMb"),
   pickMinecraftDir: () => ipcRenderer.invoke("mc:pickMinecraftDir"),
   getProfiles: (dir: string) => ipcRenderer.invoke("mc:getProfiles", dir),
+  profileHasServerIp: (dir: string, profileId: string) =>
+    ipcRenderer.invoke("mc:profileHasServerIp", dir, profileId),
   openProfileFolder: (dir: string, profileId: string) =>
     ipcRenderer.invoke("mc:openProfileFolder", dir, profileId),
+  updateProfileRamMb: (dir: string, profileId: string, ramMb: number) =>
+    ipcRenderer.invoke("mc:updateProfileRamMb", dir, profileId, ramMb),
   updateProfileName: (dir: string, profileId: string, profileName: string) =>
     ipcRenderer.invoke("mc:updateProfileName", dir, profileId, profileName),
   getRequiredForgeInfo: () => ipcRenderer.invoke("mc:getRequiredForgeInfo"),

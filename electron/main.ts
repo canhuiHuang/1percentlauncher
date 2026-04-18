@@ -2,15 +2,18 @@ import "dotenv/config";
 import { app, BrowserWindow, ipcMain, dialog, shell } from "electron";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import os from "node:os";
 import fs from "node:fs/promises";
 import { createWriteStream } from "node:fs";
 import { spawn } from "node:child_process";
+import { gunzipSync, gzipSync } from "node:zlib";
 import { getDefaultMinecraftDir } from "./services/minecraftPaths";
 import {
   readProfiles,
   createProfileForVersion,
   updateProfileVersion,
   updateProfileName,
+  updateProfileJavaArgs,
 } from "./services/profiles";
 import { readConfig, setMinecraftDir } from "./services/config";
 
@@ -54,6 +57,12 @@ type ModDownloadInfo = {
   name: string;
   link: string;
 };
+
+type NbtTag =
+  | { type: 1; value: number }
+  | { type: 8; value: string }
+  | { type: 9; elementType: 10; value: NbtTag[] }
+  | { type: 10; value: Record<string, NbtTag> };
 
 type InstalledModInfo = {
   name: string;
@@ -144,10 +153,262 @@ async function getProfileById(mcDir: string, profileId: string) {
     return path.join(profileDir, "mods");
   }
 
-  async function getProfileDir(mcDir: string, profileId: string) {
-    const profile = await getProfileById(mcDir, profileId);
-    return profile.gameDir?.trim() || mcDir;
+async function getProfileDir(mcDir: string, profileId: string) {
+  const profile = await getProfileById(mcDir, profileId);
+  return profile.gameDir?.trim() || mcDir;
+}
+
+function readNbtString(buffer: Buffer, offset: number) {
+  const length = buffer.readUInt16BE(offset);
+  const start = offset + 2;
+  const end = start + length;
+
+  return {
+    value: buffer.toString("utf8", start, end),
+    offset: end,
+  };
+}
+
+function parseNbtPayload(buffer: Buffer, offset: number, type: number): {
+  tag: NbtTag;
+  offset: number;
+} {
+  switch (type) {
+    case 1:
+      return {
+        tag: { type: 1, value: buffer.readInt8(offset) },
+        offset: offset + 1,
+      };
+    case 8: {
+      const parsed = readNbtString(buffer, offset);
+      return {
+        tag: { type: 8, value: parsed.value },
+        offset: parsed.offset,
+      };
+    }
+    case 9: {
+      const elementType = buffer.readUInt8(offset);
+      const length = buffer.readInt32BE(offset + 1);
+
+      if (elementType !== 10) {
+        throw new Error(`Unsupported NBT list element type: ${elementType}`);
+      }
+
+      let currentOffset = offset + 5;
+      const value: NbtTag[] = [];
+
+      for (let index = 0; index < length; index += 1) {
+        const parsed = parseNbtPayload(buffer, currentOffset, elementType);
+        value.push(parsed.tag);
+        currentOffset = parsed.offset;
+      }
+
+      return {
+        tag: { type: 9, elementType: 10, value },
+        offset: currentOffset,
+      };
+    }
+    case 10: {
+      const value: Record<string, NbtTag> = {};
+      let currentOffset = offset;
+
+      while (true) {
+        const childType = buffer.readUInt8(currentOffset);
+        currentOffset += 1;
+
+        if (childType === 0) {
+          break;
+        }
+
+        const name = readNbtString(buffer, currentOffset);
+        currentOffset = name.offset;
+
+        const parsed = parseNbtPayload(buffer, currentOffset, childType);
+        value[name.value] = parsed.tag;
+        currentOffset = parsed.offset;
+      }
+
+      return {
+        tag: { type: 10, value },
+        offset: currentOffset,
+      };
+    }
+    default:
+      throw new Error(`Unsupported NBT tag type: ${type}`);
   }
+}
+
+function parseNbtRoot(buffer: Buffer) {
+  const rootType = buffer.readUInt8(0);
+
+  if (rootType !== 10) {
+    throw new Error("Unsupported NBT root type.");
+  }
+
+  const rootName = readNbtString(buffer, 1);
+  const parsed = parseNbtPayload(buffer, rootName.offset, rootType);
+
+  if (parsed.tag.type !== 10) {
+    throw new Error("Invalid NBT root payload.");
+  }
+
+  return {
+    name: rootName.value,
+    value: parsed.tag.value,
+  };
+}
+
+function writeNbtString(value: string) {
+  const payload = Buffer.from(value, "utf8");
+  const header = Buffer.alloc(2);
+  header.writeUInt16BE(payload.length, 0);
+  return Buffer.concat([header, payload]);
+}
+
+function writeNbtPayload(tag: NbtTag): Buffer {
+  switch (tag.type) {
+    case 1:
+      return Buffer.from([tag.value & 0xff]);
+    case 8:
+      return writeNbtString(tag.value);
+    case 9: {
+      const length = Buffer.alloc(5);
+      length.writeUInt8(tag.elementType, 0);
+      length.writeInt32BE(tag.value.length, 1);
+
+      return Buffer.concat([
+        length,
+        ...tag.value.map((entry) => writeNbtPayload(entry)),
+      ]);
+    }
+    case 10: {
+      const parts: Buffer[] = [];
+
+      for (const [name, childTag] of Object.entries(tag.value)) {
+        parts.push(Buffer.from([childTag.type]));
+        parts.push(writeNbtString(name));
+        parts.push(writeNbtPayload(childTag));
+      }
+
+      parts.push(Buffer.from([0]));
+      return Buffer.concat(parts);
+    }
+  }
+}
+
+function readServersFile(raw: Buffer) {
+  try {
+    return {
+      parsed: parseNbtRoot(gunzipSync(raw)),
+      isCompressed: true,
+    };
+  } catch {
+    return {
+      parsed: parseNbtRoot(raw),
+      isCompressed: false,
+    };
+  }
+}
+
+async function getServerIpFromBackend() {
+  const res = await fetch("http://localhost:4032/mc/server-ip");
+
+  if (!res.ok) {
+    throw new Error(
+      `Backend server IP lookup failed: ${res.status} ${await res.text()}`
+    );
+  }
+
+  const data = (await res.json()) as { ip?: string };
+
+  if (!data.ip?.trim()) {
+    throw new Error("Backend did not return a valid server IP.");
+  }
+
+  return data.ip.trim();
+}
+
+async function addServerToProfileIfMissing(mcDir: string, profileId: string) {
+  const profileDir = await getProfileDir(mcDir, profileId);
+  const serversPath = path.join(profileDir, "servers.dat");
+  const serverIp = await getServerIpFromBackend();
+  const serverName = "1Percent Server";
+
+  let rootName = "";
+  let rootValue: Record<string, NbtTag> = {};
+  let isCompressed = true;
+
+  if (await pathExists(serversPath)) {
+    const raw = await fs.readFile(serversPath);
+    const readResult = readServersFile(raw);
+    rootName = readResult.parsed.name;
+    rootValue = readResult.parsed.value;
+    isCompressed = readResult.isCompressed;
+  }
+
+  const serversTag = rootValue.servers;
+
+  if (
+    serversTag?.type === 9 &&
+    serversTag.value.some(
+      (entry) =>
+        entry.type === 10 &&
+        entry.value.ip?.type === 8 &&
+        entry.value.ip.value.trim().toLowerCase() === serverIp.toLowerCase()
+    )
+  ) {
+    return;
+  }
+
+  const serverEntries =
+    serversTag?.type === 9 ? [...serversTag.value] : [];
+
+  serverEntries.push({
+    type: 10,
+    value: {
+      name: { type: 8, value: serverName },
+      ip: { type: 8, value: serverIp },
+    },
+  });
+
+  rootValue.servers = {
+    type: 9,
+    elementType: 10,
+    value: serverEntries,
+  };
+
+  const encoded = Buffer.concat([
+    Buffer.from([10]),
+    writeNbtString(rootName),
+    writeNbtPayload({ type: 10, value: rootValue }),
+  ]);
+
+  await fs.writeFile(serversPath, isCompressed ? gzipSync(encoded) : encoded);
+}
+
+async function profileHasServerIp(mcDir: string, profileId: string) {
+  const profileDir = await getProfileDir(mcDir, profileId);
+  const serversPath = path.join(profileDir, "servers.dat");
+
+  if (!(await pathExists(serversPath))) {
+    return false;
+  }
+
+  const serverIp = await getServerIpFromBackend();
+  const raw = await fs.readFile(serversPath);
+  const parsed = readServersFile(raw).parsed;
+  const serversTag = parsed.value.servers;
+
+  return (
+    serversTag?.type === 9 &&
+    serversTag.value.some(
+      (entry) =>
+        entry.type === 10 &&
+        entry.value.ip?.type === 8 &&
+        entry.value.ip.value.trim().toLowerCase() === serverIp.toLowerCase()
+    )
+  );
+}
 
 async function downloadDropboxFileWithProgress(
   token: string,
@@ -236,6 +497,27 @@ async function runForgeInstaller(jarPath: string, minecraftDir: string) {
   });
 }
 
+function getTotalSystemMemoryMb() {
+  return Math.max(1024, Math.floor(os.totalmem() / (1024 * 1024)));
+}
+
+function getDefaultProfileRamMb() {
+  return Math.max(1024, Math.floor(getTotalSystemMemoryMb() / 2));
+}
+
+function buildJavaArgsWithRam(existingJavaArgs: string | undefined, ramMb: number) {
+  const baseArgs = (existingJavaArgs ?? "")
+    .replace(/-Xmx\d+[mMgG]\b/g, "")
+    .replace(/-Xms\d+[mMgG]\b/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return [`-Xmx${ramMb}M`, `-Xms${ramMb}M`, baseArgs]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
+}
+
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") {
     app.quit();
@@ -278,6 +560,17 @@ app.whenReady().then(() => {
     return readProfiles(mcDir);
   });
 
+  ipcMain.handle(
+    "mc:profileHasServerIp",
+    async (_e, mcDir: string, profileId: string) => {
+      return profileHasServerIp(mcDir, profileId);
+    }
+  );
+
+  ipcMain.handle("mc:getSystemMemoryMb", async () => {
+    return getTotalSystemMemoryMb();
+  });
+
   ipcMain.handle("mc:openProfileFolder", async (_e, mcDir: string, profileId: string) => {
     const profileDir = await getProfileDir(mcDir, profileId);
     await shell.openPath(profileDir);
@@ -287,6 +580,18 @@ app.whenReady().then(() => {
     "mc:updateProfileName",
     async (_e, mcDir: string, profileId: string, profileName: string) => {
       await updateProfileName(mcDir, profileId, profileName);
+    }
+  );
+
+  ipcMain.handle(
+    "mc:updateProfileRamMb",
+    async (_e, mcDir: string, profileId: string, ramMb: number) => {
+      const profile = await getProfileById(mcDir, profileId);
+      await updateProfileJavaArgs(
+        mcDir,
+        profileId,
+        buildJavaArgsWithRam(profile.javaArgs, ramMb)
+      );
     }
   );
 
@@ -603,6 +908,21 @@ app.whenReady().then(() => {
     }
 
     await syncServerModsIntoProfile(mcDir, profileId);
+
+    const refreshedProfile = await getProfileById(mcDir, profileId);
+
+    if (!refreshedProfile.ramInitialized) {
+      await updateProfileJavaArgs(
+        mcDir,
+        profileId,
+        buildJavaArgsWithRam(
+          refreshedProfile.javaArgs,
+          getDefaultProfileRamMb()
+        )
+      );
+    }
+
+    await addServerToProfileIfMissing(mcDir, profileId);
 
     sendForgeProgress({
       stage: "done",

@@ -241,6 +241,34 @@
   max-width: 70%;
 }
 
+.ram-control {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid #e2d6c7;
+}
+
+.ram-control-header,
+.ram-control-scale {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ram-control-header {
+  margin-bottom: 8px;
+}
+
+.ram-control-scale {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #5d554c;
+}
+
+.ram-slider {
+  width: 100%;
+  accent-color: #8b5e34;
+}
+
 .actions {
   flex: 0 0 30%;
   max-width: 30%;

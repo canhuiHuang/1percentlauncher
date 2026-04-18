@@ -30,6 +30,8 @@ function mapVanillaProfiles(data: LauncherProfilesFile): McProfile[] {
     name: profile.name ?? id,
     gameDir: profile.gameDir,
     lastVersionId: profile.lastVersionId,
+    javaArgs: profile.javaArgs,
+    ramInitialized: profile.ramInitialized,
     lastUsed: profile.lastUsed,
     icon: profile.icon,
     created: profile.created,
@@ -129,6 +131,24 @@ export async function updateProfileVersion(
   }
 
   data.profiles[profileId].lastVersionId = versionId;
+  data.profiles[profileId].lastUsed = nowIso();
+
+  await writeLauncherProfilesFile(mcDir, data);
+}
+
+export async function updateProfileJavaArgs(
+  mcDir: string,
+  profileId: string,
+  javaArgs: string
+): Promise<void> {
+  const data = await readLauncherProfilesFile(mcDir);
+
+  if (!data.profiles || !data.profiles[profileId]) {
+    throw new Error(`Profile not found: ${profileId}`);
+  }
+
+  data.profiles[profileId].javaArgs = javaArgs;
+  data.profiles[profileId].ramInitialized = true;
   data.profiles[profileId].lastUsed = nowIso();
 
   await writeLauncherProfilesFile(mcDir, data);

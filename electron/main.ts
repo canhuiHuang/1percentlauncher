@@ -14,6 +14,7 @@ import {
   updateProfileVersion,
   updateProfileName,
   updateProfileJavaArgs,
+  touchProfileLastUsed,
 } from "./services/profiles";
 import { readConfig, setMinecraftDir } from "./services/config";
 
@@ -76,6 +77,9 @@ function sendForgeProgress(payload: InstallForgeProgress) {
 
 function createWindow() {
   win = new BrowserWindow({
+    width: 940,
+    height: 760,
+    useContentSize: true,
     icon: path.join(process.env.VITE_PUBLIC, "electron-vite.svg"),
     webPreferences: {
       preload: path.join(__dirname, "preload.mjs"),
@@ -497,6 +501,71 @@ async function runForgeInstaller(jarPath: string, minecraftDir: string) {
   });
 }
 
+async function launchMinecraftLauncher() {
+  const candidatePaths = [
+    path.join(
+      process.env.LOCALAPPDATA ?? "",
+      "Programs",
+      "Minecraft Launcher",
+      "MinecraftLauncher.exe"
+    ),
+    path.join(
+      process.env.LOCALAPPDATA ?? "",
+      "Microsoft",
+      "WindowsApps",
+      "MinecraftLauncher.exe"
+    ),
+    path.join(
+      process.env["ProgramFiles"] ?? "",
+      "Minecraft Launcher",
+      "MinecraftLauncher.exe"
+    ),
+    path.join(
+      process.env["ProgramFiles(x86)"] ?? "",
+      "Minecraft Launcher",
+      "MinecraftLauncher.exe"
+    ),
+  ].filter(Boolean);
+
+  for (const candidatePath of candidatePaths) {
+    if (!(await pathExists(candidatePath))) {
+      continue;
+    }
+
+    const errorMessage = await shell.openPath(candidatePath);
+
+    if (!errorMessage) {
+      return;
+    }
+  }
+
+  const appIds = [
+    "Microsoft.4297127D64EC6_8wekyb3d8bbwe!Minecraft",
+    "Microsoft.4297127D64EC6_8wekyb3d8bbwe!MinecraftLauncher",
+    "Microsoft.4297127D64EC6_8wekyb3d8bbwe!App",
+  ];
+
+  for (const appId of appIds) {
+    const target = `shell:AppsFolder\\${appId}`;
+    const child = spawn("cmd.exe", ["/c", "start", "", target], {
+      windowsHide: true,
+      detached: true,
+      stdio: "ignore",
+    });
+
+    child.on("error", () => {
+      // Try the next known AppUserModelId.
+    });
+
+    if (child.pid) {
+      child.unref();
+      return;
+    }
+  }
+
+  throw new Error("Unable to launch Minecraft Launcher.");
+}
+
 function getTotalSystemMemoryMb() {
   return Math.max(1024, Math.floor(os.totalmem() / (1024 * 1024)));
 }
@@ -539,6 +608,17 @@ app.whenReady().then(() => {
 
     return getDefaultMinecraftDir();
   });
+
+  ipcMain.handle(
+    "mc:setWindowContentSize",
+    async (_e, width: number, height: number) => {
+      if (!win) {
+        return;
+      }
+
+      win.setContentSize(Math.ceil(width), Math.ceil(height));
+    }
+  );
 
   ipcMain.handle("mc:pickMinecraftDir", async () => {
     const result = await dialog.showOpenDialog({
@@ -592,6 +672,14 @@ app.whenReady().then(() => {
         profileId,
         buildJavaArgsWithRam(profile.javaArgs, ramMb)
       );
+    }
+  );
+
+  ipcMain.handle(
+    "mc:launchSelectedProfile",
+    async (_e, mcDir: string, profileId: string) => {
+      await touchProfileLastUsed(mcDir, profileId);
+      await launchMinecraftLauncher();
     }
   );
 
@@ -831,6 +919,37 @@ app.whenReady().then(() => {
     }
   }
 
+  async function removeExtraModsFromProfile(mcDir: string, profileId: string) {
+    const modsDir = await getProfileModsDir(mcDir, profileId);
+
+    if (!(await pathExists(modsDir))) {
+      return;
+    }
+
+    const installedMods = await getInstalledModsForProfile(mcDir, profileId);
+    const serverMods = await getServerModsFromBackend();
+    const allowedNames = new Set(
+      serverMods.map((mod) => mod.name.trim().toLowerCase())
+    );
+
+    const extraMods = installedMods.filter(
+      (mod) => !allowedNames.has(mod.name.trim().toLowerCase())
+    );
+
+    for (let index = 0; index < extraMods.length; index += 1) {
+      const mod = extraMods[index];
+      await fs.rm(path.join(modsDir, mod.name), { force: true });
+      sendForgeProgress({
+        stage: "installing",
+        percent:
+          extraMods.length > 0
+            ? Math.round(((index + 1) / extraMods.length) * 100)
+            : 100,
+        message: `Removed extra mod ${mod.name} (${index + 1}/${extraMods.length}).`,
+      });
+    }
+  }
+
   async function syncServerModsIntoProfile(mcDir: string, profileId: string) {
     const modsDir = await getProfileModsDir(mcDir, profileId);
     await ensureDir(modsDir);
@@ -886,7 +1005,11 @@ app.whenReady().then(() => {
     }
   }
 
-  async function updateSelectedProfile(mcDir: string, profileId: string) {
+  async function updateSelectedProfile(
+    mcDir: string,
+    profileId: string,
+    removeUnusedMods = false
+  ) {
     sendForgeProgress({
       stage: "searching",
       percent: 0,
@@ -908,6 +1031,10 @@ app.whenReady().then(() => {
     }
 
     await syncServerModsIntoProfile(mcDir, profileId);
+
+    if (removeUnusedMods) {
+      await removeExtraModsFromProfile(mcDir, profileId);
+    }
 
     const refreshedProfile = await getProfileById(mcDir, profileId);
 
@@ -995,8 +1122,13 @@ app.whenReady().then(() => {
 
   ipcMain.handle(
     "mc:updateSelectedProfile",
-    async (_e, mcDir: string, profileId: string) => {
-      await updateSelectedProfile(mcDir, profileId);
+    async (
+      _e,
+      mcDir: string,
+      profileId: string,
+      removeUnusedMods?: boolean
+    ) => {
+      await updateSelectedProfile(mcDir, profileId, !!removeUnusedMods);
     }
   );
 

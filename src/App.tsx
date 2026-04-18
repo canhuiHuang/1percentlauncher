@@ -45,7 +45,10 @@ function parseRamMbFromJavaArgs(javaArgs?: string): number | null {
   return match[2].toLowerCase() === "g" ? amount * 1024 : amount;
 }
 
-function buildJavaArgsPreview(existingJavaArgs: string | undefined, ramMb: number) {
+function buildJavaArgsPreview(
+  existingJavaArgs: string | undefined,
+  ramMb: number
+) {
   const baseArgs = (existingJavaArgs ?? "")
     .replace(/-Xmx\d+[mMgG]\b/g, "")
     .replace(/-Xms\d+[mMgG]\b/g, "")
@@ -114,6 +117,9 @@ export default function App() {
   const [profileHasServerIp, setProfileHasServerIp] = useState(false);
   const [isLoadingProfileServerIp, setIsLoadingProfileServerIp] =
     useState(false);
+  const [removeUnusedMods, setRemoveUnusedMods] = useState(false);
+  const [isLaunchingGame, setIsLaunchingGame] = useState(false);
+  const [playFeedback, setPlayFeedback] = useState("");
   const [progress, setProgress] = useState<ForgeInstallProgress>({
     stage: "searching",
     percent: 0,
@@ -424,6 +430,7 @@ export default function App() {
   async function handleCleanInstall() {
     try {
       setError("");
+      setPlayFeedback("");
       setIsInstalling(true);
       setProgress({
         stage: "searching",
@@ -468,7 +475,11 @@ export default function App() {
       });
 
       if (!isProfileUpToDate) {
-        await window.mc.updateSelectedProfile(dir, selectedProfileId);
+        await window.mc.updateSelectedProfile(
+          dir,
+          selectedProfileId,
+          removeUnusedMods
+        );
         await reloadProfiles();
       }
 
@@ -484,7 +495,9 @@ export default function App() {
         message: "Profile is ready.",
       });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to update profile.");
+      setError(
+        err instanceof Error ? err.message : "Failed to update profile."
+      );
       setProgress({
         stage: "error",
         percent: 0,
@@ -492,6 +505,28 @@ export default function App() {
       });
     } finally {
       setIsInstalling(false);
+    }
+  }
+
+  async function handlePlaySelectedProfile() {
+    try {
+      if (!dir || !selectedProfileId) {
+        setError("No profile selected.");
+        return;
+      }
+
+      setError("");
+      setPlayFeedback("Opening Minecraft Launcher...");
+      setIsLaunchingGame(true);
+      await window.mc.launchSelectedProfile(dir, selectedProfileId);
+      setPlayFeedback("Minecraft Launcher opened.");
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to launch profile."
+      );
+      setPlayFeedback("Failed to open Minecraft Launcher.");
+    } finally {
+      setIsLaunchingGame(false);
     }
   }
 
@@ -566,8 +601,6 @@ export default function App() {
   return (
     <div className="app-shell">
       <div className="app-container">
-        <h1 className="app-title">Minecraft Installer</h1>
-
         <div className="app-grid">
           <section className="panel settings-panel">
             <h2 className="panel-title">Settings</h2>
@@ -733,6 +766,8 @@ export default function App() {
                 <div>Checking whether the profile is up to date...</div>
               ) : !selectedProfile ? (
                 <div>Select a profile to check its status.</div>
+              ) : isLaunchingGame || playFeedback ? (
+                <div>{playFeedback || "Opening Minecraft Launcher..."}</div>
               ) : isLoadingInstalledMods || isLoadingProfileServerIp ? (
                 <div>Checking installed mods and server info...</div>
               ) : isProfileUpToDate ? (
@@ -743,10 +778,7 @@ export default function App() {
             </div>
             <ProgressBar progress={progress} />
             <div className="ram-control">
-              <div className="ram-control-header">
-                <strong>Profile RAM</strong>
-                <span>{formatRamLabel(profileRamMb)}</span>
-              </div>
+              <strong className="ram-label">Profile RAM:</strong>
               <input
                 className="ram-slider"
                 type="range"
@@ -756,43 +788,69 @@ export default function App() {
                 value={profileRamMb}
                 onChange={(e) => setProfileRamMb(Number(e.target.value))}
                 onPointerUp={(e) =>
-                  void saveProfileRamMb(Number((e.target as HTMLInputElement).value))
+                  void saveProfileRamMb(
+                    Number((e.target as HTMLInputElement).value)
+                  )
                 }
                 onMouseUp={(e) =>
-                  void saveProfileRamMb(Number((e.target as HTMLInputElement).value))
+                  void saveProfileRamMb(
+                    Number((e.target as HTMLInputElement).value)
+                  )
                 }
                 onTouchEnd={(e) =>
-                  void saveProfileRamMb(Number((e.target as HTMLInputElement).value))
+                  void saveProfileRamMb(
+                    Number((e.target as HTMLInputElement).value)
+                  )
                 }
                 onKeyUp={(e) =>
-                  void saveProfileRamMb(Number((e.target as HTMLInputElement).value))
+                  void saveProfileRamMb(
+                    Number((e.target as HTMLInputElement).value)
+                  )
                 }
                 onBlur={(e) =>
-                  void saveProfileRamMb(Number((e.target as HTMLInputElement).value))
+                  void saveProfileRamMb(
+                    Number((e.target as HTMLInputElement).value)
+                  )
                 }
                 disabled={isInstalling || !dir || !selectedProfileId}
               />
-              <div className="ram-control-scale">
-                <span>1 GB</span>
-                <span>{formatRamLabel(Math.max(1024, systemMemoryMb))}</span>
-              </div>
+              <span className="ram-value">{formatRamLabel(profileRamMb)}</span>
             </div>
           </div>
           <div className="actions">
-            <button
-              className="forge-installer-button clean"
-              onClick={() => void handleCleanInstall()}
-              disabled={isInstalling || !dir}
-            >
-              {isInstalling ? "Installing Forge..." : "Clean Installation"}
-            </button>
+            <div className="clean-row">
+              <button
+                className="forge-installer-button clean"
+                onClick={() => void handleCleanInstall()}
+                disabled={isInstalling || isLaunchingGame || !dir}
+              >
+                {isInstalling ? "Installing Forge..." : "Clean Installation"}
+              </button>
+              <label className="remove-unused-toggle">
+                <input
+                  type="checkbox"
+                  checked={removeUnusedMods}
+                  onChange={(e) => setRemoveUnusedMods(e.target.checked)}
+                  disabled={
+                    isInstalling || isLaunchingGame || !selectedProfileId
+                  }
+                />
+                <span>remove unused mods</span>
+              </label>
+            </div>
 
             <button
               className="forge-installer-button update"
-              onClick={() => void handleUpdateSelectedProfile()}
-              disabled={isInstalling || !dir || !selectedProfileId}
+              onClick={() =>
+                void (isProfileUpToDate
+                  ? handlePlaySelectedProfile()
+                  : handleUpdateSelectedProfile())
+              }
+              disabled={
+                isInstalling || isLaunchingGame || !dir || !selectedProfileId
+              }
             >
-              {isProfileUpToDate ? "PLAY" : "Update"}
+              {isProfileUpToDate ? "OPEN" : "Update"}
             </button>
           </div>
         </div>

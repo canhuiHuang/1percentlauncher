@@ -49,6 +49,7 @@ declare global {
   interface Window {
     mc: {
       getSavedMinecraftDir: () => Promise<string>;
+      setWindowContentSize: (width: number, height: number) => Promise<void>;
       getSystemMemoryMb: () => Promise<number>;
       pickMinecraftDir: () => Promise<string | null>;
       getProfiles: (dir: string) => Promise<McProfile[]>;
@@ -59,6 +60,7 @@ declare global {
         profileId: string,
         ramMb: number
       ) => Promise<void>;
+      launchSelectedProfile: (dir: string, profileId: string) => Promise<void>;
       updateProfileName: (
         dir: string,
         profileId: string,
@@ -75,7 +77,11 @@ declare global {
         dir: string,
         profileId: string
       ) => Promise<void>;
-      updateSelectedProfile: (dir: string, profileId: string) => Promise<void>;
+      updateSelectedProfile: (
+        dir: string,
+        profileId: string,
+        removeUnusedMods?: boolean
+      ) => Promise<void>;
 
       onForgeInstallProgress: (
         callback: (payload: ForgeInstallProgress) => void

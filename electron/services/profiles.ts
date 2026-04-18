@@ -171,6 +171,21 @@ export async function updateProfileName(
   await writeLauncherProfilesFile(mcDir, data);
 }
 
+export async function touchProfileLastUsed(
+  mcDir: string,
+  profileId: string
+): Promise<void> {
+  const data = await readLauncherProfilesFile(mcDir);
+
+  if (!data.profiles || !data.profiles[profileId]) {
+    throw new Error(`Profile not found: ${profileId}`);
+  }
+
+  data.profiles[profileId].lastUsed = nowIso();
+
+  await writeLauncherProfilesFile(mcDir, data);
+}
+
 export async function readLastPlayedProfile(
   mcDir: string
 ): Promise<McProfile | null> {

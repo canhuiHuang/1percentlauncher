@@ -20,7 +20,7 @@ export default function ForgeInstaller({ progress }: ForgeInstallerProps) {
         />
       </div>
 
-      <div className="forge-progress-message">{progress.message || "Idle"}</div>
+      <div className="forge-progress-message">{progress.message || ""}</div>
     </div>
   );
 }

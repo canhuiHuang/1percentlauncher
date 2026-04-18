@@ -93,6 +93,26 @@ function nowIso(): string {
   return new Date().toISOString();
 }
 
+const BUILT_IN_PROFILE_ICONS = [
+  "Grass",
+  "Dirt",
+  "Crafting_Table",
+  "Furnace",
+  "Chest",
+  "Bookshelf",
+  "Diamond",
+  "Creeper_Head",
+  "Pickaxe",
+  "Sword",
+  "Nether_Star",
+];
+
+function getRandomProfileIcon(): string {
+  return BUILT_IN_PROFILE_ICONS[
+    Math.floor(Math.random() * BUILT_IN_PROFILE_ICONS.length)
+  ];
+}
+
 export async function createProfileForVersion(
   mcDir: string,
   profileName: string,
@@ -115,6 +135,7 @@ export async function createProfileForVersion(
     lastUsed: now,
     created: now,
     type: "custom",
+    icon: getRandomProfileIcon(),
   };
 
   await writeLauncherProfilesFile(mcDir, data);

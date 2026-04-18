@@ -15,6 +15,13 @@ type AppConfig = {
   onboardingDismissed?: boolean;
 };
 
+type MinecraftDirStatus = {
+  minecraftDir: string;
+  defaultDir: string;
+  defaultExists: boolean;
+  hasCustomDir: boolean;
+};
+
 type ForgeInstallResult = {
   success: boolean;
   cancelled?: boolean;
@@ -57,7 +64,10 @@ declare global {
       getAppConfig: () => Promise<AppConfig>;
       dismissOnboarding: () => Promise<AppConfig>;
       getSavedMinecraftDir: () => Promise<string>;
+      getMinecraftDirStatus: () => Promise<MinecraftDirStatus>;
       setWindowContentSize: (width: number, height: number) => Promise<void>;
+      minimizeWindow: () => Promise<void>;
+      closeWindow: () => Promise<void>;
       getSystemMemoryMb: () => Promise<number>;
       pickMinecraftDir: () => Promise<string | null>;
       getProfiles: (dir: string) => Promise<McProfile[]>;
@@ -81,6 +91,7 @@ declare global {
         profileId: string
       ) => Promise<InstalledModInfo[]>;
       installForgeClean: (dir: string) => Promise<ForgeInstallResult>;
+      installForgeCleanDefault: (dir: string) => Promise<ForgeInstallResult>;
       installForgeIntoProfile: (
         dir: string,
         profileId: string

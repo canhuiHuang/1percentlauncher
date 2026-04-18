@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, shell } from "electron";
+import { app, BrowserWindow, ipcMain, dialog, shell, Menu } from "electron";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import os from "node:os";
@@ -93,14 +93,20 @@ function getRuntimeRootDir() {
 
 function createWindow() {
   win = new BrowserWindow({
-    width: 940,
-    height: 760,
+    width: 960,
+    height: 800,
     useContentSize: true,
+    resizable: false,
+    maximizable: false,
+    autoHideMenuBar: true,
+    titleBarStyle: "hidden",
     icon: path.join(process.env.VITE_PUBLIC, "electron-vite.svg"),
     webPreferences: {
       preload: path.join(__dirname, "preload.mjs"),
     },
   });
+
+  win.setMenuBarVisibility(false);
 
   if (VITE_DEV_SERVER_URL) {
     win.loadURL(VITE_DEV_SERVER_URL);
@@ -144,6 +150,20 @@ function getTempDir() {
 
 async function ensureRuntimeDirectories() {
   await Promise.all([ensureDir(getDownloadsDir()), ensureDir(getTempDir())]);
+}
+
+async function getMinecraftDirStatus() {
+  const config = await readConfig();
+  const defaultDir = getDefaultMinecraftDir();
+  const defaultExists = await pathExists(defaultDir);
+  const savedDir = config.minecraftDir?.trim();
+
+  return {
+    minecraftDir: savedDir || defaultDir,
+    defaultDir,
+    defaultExists,
+    hasCustomDir: !!savedDir,
+  };
 }
 
 async function getProfileById(mcDir: string, profileId: string) {
@@ -568,30 +588,18 @@ app.on("activate", () => {
 
 app.whenReady().then(() => {
   void ensureRuntimeDirectories();
+  Menu.setApplicationMenu(null);
 
   ipcMain.handle("mc:getSavedMinecraftDir", async () => {
-    const config = await readConfig();
-
-    if (config.minecraftDir?.trim()) {
-      return config.minecraftDir;
-    }
-
-    const defaultDir = getDefaultMinecraftDir();
-
-    if (!(await pathExists(defaultDir))) {
-      await dialog.showMessageBox({
-        type: "warning",
-        title: "Minecraft Directory Not Found",
-        message:
-          "Minecraft default directory not found. Either install the game or insert a Minecraft directory.",
-      });
-    }
-
-    return defaultDir;
+    return (await getMinecraftDirStatus()).minecraftDir;
   });
 
   ipcMain.handle("mc:getAppConfig", async () => {
     return readConfig();
+  });
+
+  ipcMain.handle("mc:getMinecraftDirStatus", async () => {
+    return getMinecraftDirStatus();
   });
 
   ipcMain.handle("mc:dismissOnboarding", async () => {
@@ -608,6 +616,14 @@ app.whenReady().then(() => {
       win.setContentSize(Math.ceil(width), Math.ceil(height));
     }
   );
+
+  ipcMain.handle("mc:minimizeWindow", async () => {
+    win?.minimize();
+  });
+
+  ipcMain.handle("mc:closeWindow", async () => {
+    win?.close();
+  });
 
   ipcMain.handle("mc:pickMinecraftDir", async () => {
     const result = await dialog.showOpenDialog({
@@ -1069,8 +1085,7 @@ app.whenReady().then(() => {
     }
   );
 
-  ipcMain.handle("mc:installForgeClean", async (_e, mcDir: string) => {
-    let gameDir: string | undefined;
+  async function runCleanInstall(mcDir: string, gameDir?: string) {
     const cancelledResult = {
       success: false,
       cancelled: true,
@@ -1079,37 +1094,6 @@ app.whenReady().then(() => {
       fileName: "",
       localJarPath: "",
     };
-
-    const locationChoice = await dialog.showMessageBox({
-      type: "question",
-      title: "Clean Installation Location",
-      message:
-        "Would you like to create the new profile in a different folder?\nE.G: Desktop/mynewProfile/\nRecommended so it does not affect the mods in .minecraft.",
-      buttons: [
-        "Choose Different Folder (Recommended)",
-        "Use .minecraft",
-        "Cancel",
-      ],
-      cancelId: 2,
-      defaultId: 0,
-    });
-
-    if (locationChoice.response === 2) {
-      return cancelledResult;
-    }
-
-    if (locationChoice.response === 0) {
-      const folderSelection = await dialog.showOpenDialog({
-        title: "Select a folder for the new profile",
-        properties: ["openDirectory", "createDirectory"],
-      });
-
-      if (folderSelection.canceled || folderSelection.filePaths.length === 0) {
-        return cancelledResult;
-      }
-
-      gameDir = folderSelection.filePaths[0];
-    }
 
     const result = await installForgeFromBackend(mcDir);
 
@@ -1129,6 +1113,59 @@ app.whenReady().then(() => {
       fileName: result.fileName,
       localJarPath: result.localJarPath,
     };
+  }
+
+  ipcMain.handle("mc:installForgeClean", async (_e, mcDir: string) => {
+    const locationChoice = await dialog.showMessageBox({
+      type: "question",
+      title: "Clean Installation Location",
+      message:
+        "Choose where to create the new profile.\nRecommended: pick a separate folder so it does not affect the mods in .minecraft.",
+      buttons: [
+        "Choose a folder to install (recommended)",
+        "Install in default minecraft directory",
+        "Cancel",
+      ],
+      cancelId: 2,
+      defaultId: 0,
+    });
+
+    if (locationChoice.response === 2) {
+      return {
+        success: false,
+        cancelled: true,
+        profileId: "",
+        forgeVersionId: "",
+        fileName: "",
+        localJarPath: "",
+      };
+    }
+
+    if (locationChoice.response === 0) {
+      const folderSelection = await dialog.showOpenDialog({
+        title: "Select a folder for the new profile",
+        properties: ["openDirectory", "createDirectory"],
+      });
+
+      if (folderSelection.canceled || folderSelection.filePaths.length === 0) {
+        return {
+          success: false,
+          cancelled: true,
+          profileId: "",
+          forgeVersionId: "",
+          fileName: "",
+          localJarPath: "",
+        };
+      }
+
+      return runCleanInstall(mcDir, folderSelection.filePaths[0]);
+    }
+
+    return runCleanInstall(mcDir);
+  });
+
+  ipcMain.handle("mc:installForgeCleanDefault", async (_e, mcDir: string) => {
+    return runCleanInstall(mcDir);
   });
 
   ipcMain.handle(

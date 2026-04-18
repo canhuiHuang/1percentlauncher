@@ -17,6 +17,22 @@ type InstalledModInfo = {
   modified: string;
 };
 
+const PROFILE_ICON_EMOJIS: Record<string, string> = {
+  Grass: "🌿",
+  Dirt: "🟫",
+  Crafting_Table: "🪵",
+  Furnace: "🔥",
+  Chest: "🧰",
+  Bookshelf: "📚",
+  Diamond: "💎",
+  Creeper_Head: "💥",
+  Pickaxe: "⛏️",
+  Sword: "🗡️",
+  Nether_Star: "⭐",
+};
+
+const APP_VERSION = "0.0.0";
+
 function normalizeModName(name: string): string {
   return name.trim().toLowerCase();
 }
@@ -123,6 +139,10 @@ export default function App() {
   const [isLaunchingGame, setIsLaunchingGame] = useState(false);
   const [playFeedback, setPlayFeedback] = useState("");
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [defaultMinecraftDir, setDefaultMinecraftDir] = useState("");
+  const [defaultMinecraftDirExists, setDefaultMinecraftDirExists] =
+    useState(true);
+  const [hasCustomMinecraftDir, setHasCustomMinecraftDir] = useState(false);
   const [progress, setProgress] = useState<ForgeInstallProgress>({
     stage: "searching",
     percent: 0,
@@ -214,6 +234,11 @@ export default function App() {
     !isLoadingRequiredForgeVersion &&
     !isLoadingServerMods &&
     !requiredForgeVersionId;
+  const isOnboardingMinecraftDirMissing =
+    showOnboarding && !defaultMinecraftDirExists && !hasCustomMinecraftDir;
+  const selectedProfileIcon = selectedProfile?.icon
+    ? PROFILE_ICON_EMOJIS[selectedProfile.icon] ?? "🎮"
+    : "🎮";
   const areServerActionsDisabled =
     isInstalling ||
     isLaunchingGame ||
@@ -256,13 +281,16 @@ export default function App() {
   useEffect(() => {
     async function loadInitialDir() {
       try {
-        const [savedDir, totalMemoryMb, config] = await Promise.all([
-          window.mc.getSavedMinecraftDir(),
+        const [dirStatus, totalMemoryMb, config] = await Promise.all([
+          window.mc.getMinecraftDirStatus(),
           window.mc.getSystemMemoryMb(),
           window.mc.getAppConfig(),
         ]);
-        setDir(savedDir);
+        setDir(dirStatus.minecraftDir);
         setSystemMemoryMb(totalMemoryMb);
+        setDefaultMinecraftDir(dirStatus.defaultDir);
+        setDefaultMinecraftDirExists(dirStatus.defaultExists);
+        setHasCustomMinecraftDir(dirStatus.hasCustomDir);
         setShowOnboarding(!config.onboardingDismissed);
       } catch {
         setError("Failed to load Minecraft directory.");
@@ -413,6 +441,8 @@ export default function App() {
       if (!selectedDir) return;
 
       setDir(selectedDir);
+      setHasCustomMinecraftDir(true);
+      setDefaultMinecraftDirExists(true);
       setProfiles([]);
     } catch {
       setError("Failed to select Minecraft directory.");
@@ -463,6 +493,50 @@ export default function App() {
         });
         return;
       }
+      const updatedProfiles = await reloadProfiles();
+      const createdProfileStillExists = updatedProfiles.some(
+        (profile) => profile.id === result.profileId
+      );
+
+      if (createdProfileStillExists) {
+        setSelectedProfileId(result.profileId);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to install Forge.");
+      setProgress({
+        stage: "error",
+        percent: 0,
+        message: "Forge installation failed.",
+      });
+    } finally {
+      setIsInstalling(false);
+    }
+  }
+
+  async function handleOnboardingInstallDefault() {
+    try {
+      setError("");
+      setPlayFeedback("");
+      setShowOnboarding(false);
+      setIsInstalling(true);
+      setProgress({
+        stage: "searching",
+        percent: 0,
+        message: "Starting...",
+      });
+
+      const installDir = defaultMinecraftDir || dir;
+      const result = await window.mc.installForgeCleanDefault(installDir);
+      if (result.cancelled) {
+        setProgress({
+          stage: "searching",
+          percent: 0,
+          message: "Clean installation cancelled.",
+        });
+        setShowOnboarding(true);
+        return;
+      }
+
       const updatedProfiles = await reloadProfiles();
       const createdProfileStillExists = updatedProfiles.some(
         (profile) => profile.id === result.profileId
@@ -633,24 +707,67 @@ export default function App() {
 
   return (
     <div className="app-shell">
+      <div className="window-drag-region">
+        <div className="window-title">1percent launcher ({APP_VERSION})</div>
+        <div className="window-controls">
+          <button
+            className="window-control-button"
+            onClick={() => void window.mc.minimizeWindow()}
+            aria-label="Minimize window"
+            title="Minimize"
+          >
+            _
+          </button>
+          <button
+            className="window-control-button window-control-button-close"
+            onClick={() => void window.mc.closeWindow()}
+            aria-label="Close window"
+            title="Close"
+          >
+            X
+          </button>
+        </div>
+      </div>
       {showOnboarding ? (
         <div className="onboarding-overlay">
           <div className="onboarding-modal">
             <h3 className="onboarding-title">1Percent Launcher</h3>
-            <button
-              className="onboarding-install-button"
-              onClick={() => void handleCleanInstall()}
-              disabled={isInstalling}
-            >
-              Install mods
-            </button>
-            <button
-              className="onboarding-existing-button"
-              onClick={() => void dismissOnboarding()}
-              disabled={isInstalling}
-            >
-              Install in existing profile
-            </button>
+            {isOnboardingMinecraftDirMissing ? (
+              <>
+                <p className="onboarding-copy">
+                  Minecraft default directory was not found. Install Minecraft
+                  first, or choose your Minecraft directory to continue.
+                </p>
+                <button
+                  className="onboarding-install-button"
+                  onClick={() => void chooseFolder()}
+                  disabled={isInstalling}
+                >
+                  Choose Minecraft Directory
+                </button>
+                <p className="onboarding-copy">
+                  Install Minecraft first if you do not have a valid directory
+                  yet.
+                </p>
+              </>
+            ) : (
+              <>
+                <button
+                  className="onboarding-install-button"
+                  onClick={() => void handleOnboardingInstallDefault()}
+                  disabled={isInstalling}
+                >
+                  Install mods
+                </button>
+                <button
+                  className="onboarding-existing-button"
+                  onClick={() => void dismissOnboarding()}
+                  disabled={isInstalling}
+                >
+                  Install in existing profile
+                </button>
+              </>
+            )}
           </div>
         </div>
       ) : null}
@@ -659,28 +776,14 @@ export default function App() {
           <section className="panel settings-panel">
             <h2 className="panel-title">Settings</h2>
 
-            <strong className="field-label">Minecraft Directory:</strong>
-            <div className="field-block directory-row">
-              <input
-                className="text-input"
-                type="text"
-                value={dir}
-                placeholder="Enter or select Minecraft directory..."
-                onChange={(e) => setDir(e.target.value)}
-                readOnly
-                disabled={isInstalling}
-              />
-              <button
-                className="browse-button"
-                onClick={chooseFolder}
-                disabled={isInstalling}
-              >
-                📂
-              </button>
-            </div>
-
             <strong className="field-label">Current Profile:</strong>
             <div className="field-block profile-row">
+              <div
+                className="profile-icon-badge"
+                title={selectedProfile?.icon || "Profile icon"}
+              >
+                {selectedProfileIcon}
+              </div>
               <select
                 className="select-input"
                 value={selectedProfileId}
@@ -717,6 +820,7 @@ export default function App() {
               </label>{" "}
               <input
                 className="text-input"
+                style={{ maxWidth: "200px", marginLeft: "6px" }}
                 type="text"
                 value={profileNameInput}
                 placeholder="Enter profile name..."
@@ -731,7 +835,7 @@ export default function App() {
               />
             </div>
 
-            <div className="flex ac">
+            <div className="flex ac mt-4">
               {" "}
               <strong className="field-label">Version:</strong>
               {selectedProfile?.lastVersionId ? (
@@ -746,7 +850,9 @@ export default function App() {
 
             <div>
               <div className="flex ac">
-                <div className="field-label mr-2">Required Mods Installed:</div>
+                <div className="field-label mr-2">
+                  <strong>Required Mods Installed:</strong>{" "}
+                </div>
                 <span>
                   {installedRequiredModsCount} / {requiredServerModsCount}{" "}
                   {getMatchStatusIcon(
@@ -755,7 +861,9 @@ export default function App() {
                 </span>
               </div>
               <div className="flex ac">
-                <div className="field-label mr-2">Optional Mods Installed:</div>
+                <div className="field-label mr-2">
+                  <strong>Optional Mods Installed:</strong>
+                </div>
                 <span>
                   {installedOptionalModsCount} / {optionalServerModsCount}{" "}
                   {getMatchStatusIcon(
@@ -779,6 +887,26 @@ export default function App() {
                   {/* {TODO: Add a small btn here to delete extra mods, with a popup to confirm} */}
                 </div>
               )}
+            </div>
+
+            <strong className="field-label">Minecraft Directory:</strong>
+            <div className="field-block directory-row">
+              <input
+                className="text-input"
+                type="text"
+                value={dir}
+                placeholder="Enter or select Minecraft directory..."
+                onChange={(e) => setDir(e.target.value)}
+                readOnly
+                disabled={isInstalling}
+              />
+              <button
+                className="browse-button"
+                onClick={chooseFolder}
+                disabled={isInstalling}
+              >
+                📂
+              </button>
             </div>
           </section>
 
@@ -880,7 +1008,12 @@ export default function App() {
               <button
                 className="forge-installer-button clean"
                 onClick={() => void handleCleanInstall()}
-                disabled={isInstalling || isLaunchingGame || !dir || isServerInfoUnavailable}
+                disabled={
+                  isInstalling ||
+                  isLaunchingGame ||
+                  !dir ||
+                  isServerInfoUnavailable
+                }
               >
                 {isInstalling ? "Installing Forge..." : "Clean Installation"}
               </button>

@@ -1,6 +1,16 @@
+html,
 body {
+  width: 100%;
+  height: 100%;
   padding: 0;
   margin: 0;
+  overflow: hidden;
+  font-size: 12px;
+}
+
+#root {
+  width: 100%;
+  height: 100%;
 }
 
 .onboarding-overlay {
@@ -30,6 +40,13 @@ body {
   margin: 0 0 8px;
 }
 
+.onboarding-copy {
+  margin: 0 0 4px;
+  color: #5d554c;
+  line-height: 1.45;
+  text-align: center;
+}
+
 .onboarding-install-button {
   width: 100%;
   min-height: 86px;
@@ -53,26 +70,73 @@ body {
 }
 
 .app-shell {
+  width: 100%;
+  min-height: 100%;
   padding: 20px;
   font-family: Arial, sans-serif;
   background: #f4f1ea;
   color: #1f1b16;
+  box-sizing: border-box;
+}
+
+.window-drag-region {
+  height: 40px;
+  margin: -20px -20px 10px;
+  padding: 0 0 0 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  -webkit-app-region: drag;
+}
+
+.window-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #3d3328;
+  letter-spacing: 0.02em;
+  user-select: none;
+}
+
+.window-controls {
+  height: 100%;
+  display: flex;
+  align-items: stretch;
+  -webkit-app-region: no-drag;
+}
+
+.window-control-button {
+  width: 44px;
+  border: 0;
+  color: #3d3328;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.window-control-button:hover {
+  background: rgba(61, 51, 40, 0.08);
+}
+
+.window-control-button-close:hover {
+  background: #c94242;
+  color: #fff;
+}
+
+.app-container,
+.app-container * {
+  -webkit-app-region: no-drag;
 }
 
 .app-container {
-  /* max-width: 1100px; */
+  width: 100%;
+  height: 100%;
   margin: 0 auto;
-}
-
-.app-title {
-  margin-top: 0;
-  margin-bottom: 20px;
+  box-sizing: border-box;
 }
 
 .app-grid {
   display: flex;
-  gap: 10px;
-  align-items: stretch;
+  justify-content: space-between;
 }
 
 .panel {
@@ -86,7 +150,7 @@ body {
 }
 
 .settings-panel {
-  width: 420px;
+  width: 450px;
   background: #fffaf1;
   border: 1px solid #d6c8b8;
   box-shadow: 0 10px 30px rgba(75, 52, 27, 0.08);
@@ -108,8 +172,8 @@ body {
 }
 
 .field-block {
-  margin-top: 8px;
-  margin-bottom: 20px;
+  margin-top: 0px;
+  margin-bottom: 10px;
 }
 
 .directory-row {
@@ -119,13 +183,24 @@ body {
 
 .profile-row {
   display: flex;
+  align-items: center;
   gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+
+.profile-icon-badge {
+  width: 42px;
+  height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
 }
 
 .text-input,
 .select-input {
-  width: 70%;
-  padding: 10px 12px;
+  padding: 6px 12px;
   border: 1px solid #cdb9a3;
   border-radius: 6px;
   background: #fff;
@@ -133,6 +208,11 @@ body {
 
 .text-input {
   flex: 1;
+}
+
+.select-input {
+  flex: 1;
+  min-width: 0;
 }
 
 .browse-button {
@@ -153,6 +233,7 @@ body {
   cursor: pointer;
   white-space: nowrap;
   box-shadow: 0 8px 18px rgba(53, 88, 60, 0.16);
+  flex: 0 0 auto;
 }
 
 .browse-button:disabled {
@@ -293,8 +374,8 @@ body {
 }
 
 .installer-progress {
-  flex: 0 0 70%;
-  max-width: 70%;
+  flex: 0 0 65%;
+  max-width: 65%;
 }
 
 .ram-control {
@@ -317,8 +398,8 @@ body {
 }
 
 .actions {
-  flex: 0 0 30%;
-  max-width: 30%;
+  flex: 0 0 35%;
+  max-width: 35%;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -358,7 +439,7 @@ body {
 
 .forge-installer-button.update {
   width: 100%;
-  width: 240px;
+  width: 280px;
   height: 100px;
   font-size: 32px;
   border-radius: 10px;
@@ -397,10 +478,16 @@ body {
 .mr-2 {
   margin-right: 4px;
 }
+.mt-4 {
+  margin-top: 8px;
+}
+.mb-2 {
+  margin-bottom: 4px;
+}
 
 @media (max-width: 800px) {
   .app-grid {
-    grid-template-columns: 1fr;
+    flex-direction: column;
   }
 
   .installer-card {

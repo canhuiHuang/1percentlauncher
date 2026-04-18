@@ -4,8 +4,11 @@ contextBridge.exposeInMainWorld("mc", {
   getAppConfig: () => ipcRenderer.invoke("mc:getAppConfig"),
   dismissOnboarding: () => ipcRenderer.invoke("mc:dismissOnboarding"),
   getSavedMinecraftDir: () => ipcRenderer.invoke("mc:getSavedMinecraftDir"),
+  getMinecraftDirStatus: () => ipcRenderer.invoke("mc:getMinecraftDirStatus"),
   setWindowContentSize: (width: number, height: number) =>
     ipcRenderer.invoke("mc:setWindowContentSize", width, height),
+  minimizeWindow: () => ipcRenderer.invoke("mc:minimizeWindow"),
+  closeWindow: () => ipcRenderer.invoke("mc:closeWindow"),
   getSystemMemoryMb: () => ipcRenderer.invoke("mc:getSystemMemoryMb"),
   pickMinecraftDir: () => ipcRenderer.invoke("mc:pickMinecraftDir"),
   getProfiles: (dir: string) => ipcRenderer.invoke("mc:getProfiles", dir),

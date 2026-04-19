@@ -77,6 +77,16 @@ body {
   text-align: center;
 }
 
+.onboarding-checkbox-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  color: #f3e6d5;
+  font-size: 13px;
+}
+
 .onboarding-install-button {
   width: 100%;
   min-height: 86px;

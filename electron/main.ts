@@ -1476,7 +1476,11 @@ app.whenReady().then(() => {
     }
   );
 
-  async function runCleanInstall(mcDir: string, gameDir?: string) {
+  async function runCleanInstall(
+    mcDir: string,
+    gameDir?: string,
+    removeUnusedMods = false
+  ) {
     const result = await installForgeFromBackend(mcDir);
 
     const profileId = await createProfileForVersion(
@@ -1486,7 +1490,7 @@ app.whenReady().then(() => {
       gameDir
     );
 
-    await updateSelectedProfile(mcDir, profileId, false);
+    await updateSelectedProfile(mcDir, profileId, removeUnusedMods);
 
     return {
       success: true,
@@ -1546,9 +1550,12 @@ app.whenReady().then(() => {
     return runCleanInstall(mcDir);
   });
 
-  ipcMain.handle("mc:installForgeCleanDefault", async (_e, mcDir: string) => {
-    return runCleanInstall(mcDir);
-  });
+  ipcMain.handle(
+    "mc:installForgeCleanDefault",
+    async (_e, mcDir: string, removeUnusedMods?: boolean) => {
+      return runCleanInstall(mcDir, undefined, !!removeUnusedMods);
+    }
+  );
 
   ipcMain.handle(
     "mc:installForgeIntoProfile",

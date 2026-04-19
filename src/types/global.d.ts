@@ -127,7 +127,10 @@ declare global {
         modName: string
       ) => Promise<void>;
       installForgeClean: (dir: string) => Promise<ForgeInstallResult>;
-      installForgeCleanDefault: (dir: string) => Promise<ForgeInstallResult>;
+      installForgeCleanDefault: (
+        dir: string,
+        removeUnusedMods?: boolean
+      ) => Promise<ForgeInstallResult>;
       installForgeIntoProfile: (
         dir: string,
         profileId: string

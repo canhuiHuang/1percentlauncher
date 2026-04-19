@@ -160,6 +160,8 @@ export default function App() {
   const [isLaunchingGame, setIsLaunchingGame] = useState(false);
   const [playFeedback, setPlayFeedback] = useState("");
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [onboardingRemoveUnusedMods, setOnboardingRemoveUnusedMods] =
+    useState(false);
   const [defaultMinecraftDir, setDefaultMinecraftDir] = useState("");
   const [defaultMinecraftDirExists, setDefaultMinecraftDirExists] =
     useState(true);
@@ -805,7 +807,10 @@ export default function App() {
       });
 
       const installDir = defaultMinecraftDir || dir;
-      const result = await window.mc.installForgeCleanDefault(installDir);
+      const result = await window.mc.installForgeCleanDefault(
+        installDir,
+        onboardingRemoveUnusedMods
+      );
       if (result.cancelled) {
         setProgress({
           stage: "searching",
@@ -1115,6 +1120,17 @@ export default function App() {
               </>
             ) : (
               <>
+                <label className="onboarding-checkbox-row">
+                  <input
+                    type="checkbox"
+                    checked={onboardingRemoveUnusedMods}
+                    onChange={(e) =>
+                      setOnboardingRemoveUnusedMods(e.target.checked)
+                    }
+                    disabled={isInstalling}
+                  />
+                  <span>Remove unused mods</span>
+                </label>
                 <button
                   className="onboarding-install-button"
                   onClick={() => void handleOnboardingInstallDefault()}

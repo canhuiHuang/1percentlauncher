@@ -40,8 +40,8 @@ contextBridge.exposeInMainWorld("mc", {
     ipcRenderer.invoke("mc:removeProfileMod", dir, profileId, modName),
   installForgeClean: (dir: string) =>
     ipcRenderer.invoke("mc:installForgeClean", dir),
-  installForgeCleanDefault: (dir: string) =>
-    ipcRenderer.invoke("mc:installForgeCleanDefault", dir),
+  installForgeCleanDefault: (dir: string, removeUnusedMods?: boolean) =>
+    ipcRenderer.invoke("mc:installForgeCleanDefault", dir, removeUnusedMods),
   installForgeIntoProfile: (dir: string, profileId: string) =>
     ipcRenderer.invoke("mc:installForgeIntoProfile", dir, profileId),
   updateSelectedProfile: (

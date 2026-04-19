@@ -246,9 +246,7 @@ function sendForgeProgress(payload: InstallForgeProgress) {
 }
 
 function getRuntimeRootDir() {
-  return app.isPackaged
-    ? path.dirname(process.execPath)
-    : app.getPath("userData");
+  return app.getPath("userData");
 }
 
 function createWindow() {
@@ -936,7 +934,7 @@ app.whenReady().then(() => {
   );
 
   ipcMain.handle("mc:openLauncherDownloadsFolder", async () => {
-    await ensureDir(getDownloadsDir());
+    await ensureRuntimeDirectories();
     await shell.openPath(getDownloadsDir());
   });
 
@@ -1386,6 +1384,8 @@ app.whenReady().then(() => {
     profileId: string,
     removeUnusedMods = false
   ) {
+    await ensureRuntimeDirectories();
+
     sendForgeProgress({
       stage: "searching",
       percent: 0,
@@ -1481,6 +1481,8 @@ app.whenReady().then(() => {
     gameDir?: string,
     removeUnusedMods = false
   ) {
+    await ensureRuntimeDirectories();
+
     const result = await installForgeFromBackend(mcDir);
 
     const profileId = await createProfileForVersion(

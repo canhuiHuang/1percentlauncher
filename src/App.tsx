@@ -37,7 +37,7 @@ const PROFILE_ICON_EMOJIS: Record<string, string> = {
   Nether_Star: "⭐",
 };
 
-const APP_VERSION = "0.0.2";
+const APP_VERSION = "0.0.3";
 
 function normalizeModName(name: string): string {
   return name.trim().toLowerCase();
@@ -1264,7 +1264,8 @@ export default function App() {
                   <span>Extra Mods:</span>
                 </div>
                 <span>
-                  {extraInstalledModsCount} <strong className="mods-counter-sep">|</strong>{" "}
+                  {extraInstalledModsCount}{" "}
+                  <strong className="mods-counter-sep">|</strong>{" "}
                   <span>Disabled Mods:</span> {disabledModsCount}
                 </span>
               </div>
@@ -1286,7 +1287,8 @@ export default function App() {
                       value={installedModFilter}
                       onChange={(e) =>
                         setInstalledModFilter(
-                          e.target.value as (typeof modFilterOptions)[number]["value"]
+                          e.target
+                            .value as (typeof modFilterOptions)[number]["value"]
                         )
                       }
                       disabled={areModActionsDisabled}
@@ -1301,7 +1303,9 @@ export default function App() {
                       type="button"
                       className="mods-bulk-remove-button"
                       onClick={() => void handleRemoveAllExtraMods()}
-                      disabled={areModActionsDisabled || extraModNames.length === 0}
+                      disabled={
+                        areModActionsDisabled || extraModNames.length === 0
+                      }
                     >
                       Remove all extra mods
                     </button>

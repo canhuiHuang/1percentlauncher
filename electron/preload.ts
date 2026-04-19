@@ -32,6 +32,12 @@ contextBridge.exposeInMainWorld("mc", {
   getServerMods: () => ipcRenderer.invoke("mc:getServerMods"),
   getInstalledMods: (dir: string, profileId: string) =>
     ipcRenderer.invoke("mc:getInstalledMods", dir, profileId),
+  disableProfileMod: (dir: string, profileId: string, modName: string) =>
+    ipcRenderer.invoke("mc:disableProfileMod", dir, profileId, modName),
+  enableProfileMod: (dir: string, profileId: string, modName: string) =>
+    ipcRenderer.invoke("mc:enableProfileMod", dir, profileId, modName),
+  removeProfileMod: (dir: string, profileId: string, modName: string) =>
+    ipcRenderer.invoke("mc:removeProfileMod", dir, profileId, modName),
   installForgeClean: (dir: string) =>
     ipcRenderer.invoke("mc:installForgeClean", dir),
   installForgeCleanDefault: (dir: string) =>

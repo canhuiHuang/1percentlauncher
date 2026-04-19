@@ -101,6 +101,7 @@ type InstalledModInfo = {
   name: string;
   size: number;
   modified: string;
+  disabled?: boolean;
 };
 
 function getMainProcessLogPath() {
@@ -253,7 +254,7 @@ function getRuntimeRootDir() {
 function createWindow() {
   win = new BrowserWindow({
     width: 960,
-    height: 730,
+    height: 800,
     useContentSize: true,
     resizable: false,
     maximizable: false,
@@ -332,6 +333,10 @@ function getDownloadsDir() {
 
 function getTempDir() {
   return path.join(getRuntimeRootDir(), "temp");
+}
+
+function getProfileDisabledModsDir(profileId: string) {
+  return path.join(getTempDir(), "disabled-mods", profileId);
 }
 
 async function ensureRuntimeDirectories() {
@@ -668,6 +673,43 @@ async function profileHasServerIp(mcDir: string, profileId: string) {
   return hasVisibleServerEntry(readResult.parsed.value, serverIp);
 }
 
+function getWindowsExecutableCandidates(fileNames: string[]) {
+  const roots = [
+    process.env.APPDATA,
+    process.env.LOCALAPPDATA,
+    process.env["ProgramFiles"],
+    process.env["ProgramFiles(x86)"],
+    process.env.USERPROFILE
+      ? path.join(process.env.USERPROFILE, "Desktop")
+      : undefined,
+    process.env.USERPROFILE
+      ? path.join(process.env.USERPROFILE, "Downloads")
+      : undefined,
+  ].filter((value): value is string => !!value);
+
+  const relativeDirs = [
+    "",
+    ".minecraft",
+    path.join(".minecraft", "TLauncher"),
+    "TLauncher",
+    path.join("Programs", "TLauncher"),
+    path.join("Programs", "Minecraft Launcher"),
+    "Minecraft Launcher",
+  ];
+
+  const candidates = new Set<string>();
+
+  for (const root of roots) {
+    for (const relativeDir of relativeDirs) {
+      for (const fileName of fileNames) {
+        candidates.add(path.join(root, relativeDir, fileName));
+      }
+    }
+  }
+
+  return [...candidates];
+}
+
 async function runForgeInstaller(jarPath: string, minecraftDir: string) {
   return await new Promise<void>((resolve, reject) => {
     const child = spawn(
@@ -710,29 +752,18 @@ async function runForgeInstaller(jarPath: string, minecraftDir: string) {
 
 async function launchMinecraftLauncher() {
   const candidatePaths = [
-    path.join(
-      process.env.LOCALAPPDATA ?? "",
-      "Programs",
-      "Minecraft Launcher",
-      "MinecraftLauncher.exe"
-    ),
+    ...getWindowsExecutableCandidates([
+      "TLauncher.exe",
+      "tlauncher.exe",
+      "MinecraftLauncher.exe",
+    ]),
     path.join(
       process.env.LOCALAPPDATA ?? "",
       "Microsoft",
       "WindowsApps",
       "MinecraftLauncher.exe"
     ),
-    path.join(
-      process.env["ProgramFiles"] ?? "",
-      "Minecraft Launcher",
-      "MinecraftLauncher.exe"
-    ),
-    path.join(
-      process.env["ProgramFiles(x86)"] ?? "",
-      "Minecraft Launcher",
-      "MinecraftLauncher.exe"
-    ),
-  ].filter(Boolean);
+  ];
 
   for (const candidatePath of candidatePaths) {
     if (!(await pathExists(candidatePath))) {
@@ -990,12 +1021,10 @@ app.whenReady().then(() => {
     return data.mods as ServerModInfo[];
   }
 
-  async function getInstalledModsForProfile(
-    mcDir: string,
-    profileId: string
+  async function getModsFromDir(
+    modsDir: string,
+    disabled: boolean
   ): Promise<InstalledModInfo[]> {
-    const modsDir = await getProfileModsDir(mcDir, profileId);
-
     if (!(await pathExists(modsDir))) {
       return [];
     }
@@ -1012,11 +1041,99 @@ app.whenReady().then(() => {
             name: entry.name,
             size: stats.size,
             modified: stats.mtime.toISOString(),
+            disabled,
           };
         })
     );
 
     return files.sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  async function getProfileActiveMods(
+    mcDir: string,
+    profileId: string
+  ): Promise<InstalledModInfo[]> {
+    const modsDir = await getProfileModsDir(mcDir, profileId);
+    return getModsFromDir(modsDir, false);
+  }
+
+  async function getInstalledModsForProfile(
+    mcDir: string,
+    profileId: string
+  ): Promise<InstalledModInfo[]> {
+    const modsDir = await getProfileModsDir(mcDir, profileId);
+    const disabledModsDir = getProfileDisabledModsDir(profileId);
+    const [activeMods, disabledMods] = await Promise.all([
+      getModsFromDir(modsDir, false),
+      getModsFromDir(disabledModsDir, true),
+    ]);
+
+    return [...activeMods, ...disabledMods].sort((a, b) => {
+      if (!!a.disabled !== !!b.disabled) {
+        return a.disabled ? 1 : -1;
+      }
+
+      return a.name.localeCompare(b.name);
+    });
+  }
+
+  async function moveFile(sourcePath: string, targetPath: string) {
+    await ensureDir(path.dirname(targetPath));
+    await fs.rm(targetPath, { force: true });
+
+    try {
+      await fs.rename(sourcePath, targetPath);
+    } catch {
+      await fs.copyFile(sourcePath, targetPath);
+      await fs.rm(sourcePath, { force: true });
+    }
+  }
+
+  async function disableProfileMod(
+    mcDir: string,
+    profileId: string,
+    modName: string
+  ) {
+    const modsDir = await getProfileModsDir(mcDir, profileId);
+    const sourcePath = path.join(modsDir, modName);
+
+    if (!(await pathExists(sourcePath))) {
+      throw new Error(`Mod not found in profile: ${modName}`);
+    }
+
+    const disabledModsDir = getProfileDisabledModsDir(profileId);
+    await moveFile(sourcePath, path.join(disabledModsDir, modName));
+  }
+
+  async function enableProfileMod(
+    mcDir: string,
+    profileId: string,
+    modName: string
+  ) {
+    const disabledModsDir = getProfileDisabledModsDir(profileId);
+    const sourcePath = path.join(disabledModsDir, modName);
+
+    if (!(await pathExists(sourcePath))) {
+      throw new Error(`Disabled mod not found: ${modName}`);
+    }
+
+    const modsDir = await getProfileModsDir(mcDir, profileId);
+    await ensureDir(modsDir);
+    await moveFile(sourcePath, path.join(modsDir, modName));
+  }
+
+  async function removeProfileMod(
+    mcDir: string,
+    profileId: string,
+    modName: string
+  ) {
+    const modsDir = await getProfileModsDir(mcDir, profileId);
+    const disabledModsDir = getProfileDisabledModsDir(profileId);
+
+    await Promise.all([
+      fs.rm(path.join(modsDir, modName), { force: true }),
+      fs.rm(path.join(disabledModsDir, modName), { force: true }),
+    ]);
   }
 
   async function downloadFileWithProgress(
@@ -1183,7 +1300,7 @@ app.whenReady().then(() => {
       return;
     }
 
-    const installedMods = await getInstalledModsForProfile(mcDir, profileId);
+    const installedMods = await getProfileActiveMods(mcDir, profileId);
     const serverMods = await getServerModsFromBackend();
     const allowedNames = new Set(
       serverMods.map((mod) => mod.name.trim().toLowerCase())
@@ -1213,7 +1330,7 @@ app.whenReady().then(() => {
     const modsDir = await getProfileModsDir(mcDir, profileId);
     await ensureDir(modsDir);
 
-    const installedMods = await getInstalledModsForProfile(mcDir, profileId);
+    const installedMods = await getProfileActiveMods(mcDir, profileId);
     const installedNames = new Set(installedMods.map((mod) => mod.name));
     const allServerMods = await getServerModsFromBackend();
     const missingMods = allServerMods.filter(
@@ -1335,6 +1452,27 @@ app.whenReady().then(() => {
     "mc:getInstalledMods",
     async (_e, mcDir: string, profileId: string) => {
       return getInstalledModsForProfile(mcDir, profileId);
+    }
+  );
+
+  ipcMain.handle(
+    "mc:disableProfileMod",
+    async (_e, mcDir: string, profileId: string, modName: string) => {
+      await disableProfileMod(mcDir, profileId, modName);
+    }
+  );
+
+  ipcMain.handle(
+    "mc:enableProfileMod",
+    async (_e, mcDir: string, profileId: string, modName: string) => {
+      await enableProfileMod(mcDir, profileId, modName);
+    }
+  );
+
+  ipcMain.handle(
+    "mc:removeProfileMod",
+    async (_e, mcDir: string, profileId: string, modName: string) => {
+      await removeProfileMod(mcDir, profileId, modName);
     }
   );
 

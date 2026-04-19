@@ -1,5 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import ModList, { ModListItem, ModTag } from "./components/ModList";
+import ModList, {
+  ModListAction,
+  ModListItem,
+  ModTag,
+} from "./components/ModList";
 import ProgressBar, { ForgeInstallProgress } from "./components/ProgressBar";
 import { McProfile } from "../electron/types/minecraft";
 import mcIcon from "./assets/mc-icon.png";
@@ -16,6 +20,7 @@ type InstalledModInfo = {
   name: string;
   size: number;
   modified: string;
+  disabled?: boolean;
 };
 
 const PROFILE_ICON_EMOJIS: Record<string, string> = {
@@ -119,6 +124,17 @@ function getModTags(name: string): ModTag[] {
 
 export default function App() {
   const mc = window.mc;
+  const modFilterOptions = [
+    { value: "all", label: "All mods" },
+    { value: "active", label: "Active only" },
+    { value: "disabled", label: "Disabled only" },
+    { value: "required", label: "Tag: required" },
+    { value: "local", label: "Tag: local" },
+    { value: "ambient", label: "Tag: ambient" },
+    { value: "util", label: "Tag: util" },
+    { value: "performance", label: "Tag: performance" },
+    { value: "extra", label: "Tag: extra" },
+  ] as const;
   const [dir, setDir] = useState("");
   const [profiles, setProfiles] = useState<McProfile[]>([]);
   const [selectedProfileId, setSelectedProfileId] = useState<string>("");
@@ -139,7 +155,8 @@ export default function App() {
   const [profileHasServerIp, setProfileHasServerIp] = useState(false);
   const [isLoadingProfileServerIp, setIsLoadingProfileServerIp] =
     useState(false);
-  const [removeUnusedMods, setRemoveUnusedMods] = useState(true);
+  const [installedModFilter, setInstalledModFilter] =
+    useState<(typeof modFilterOptions)[number]["value"]>("all");
   const [isLaunchingGame, setIsLaunchingGame] = useState(false);
   const [playFeedback, setPlayFeedback] = useState("");
   const [showOnboarding, setShowOnboarding] = useState(false);
@@ -291,8 +308,13 @@ export default function App() {
   //     ? "Launcher updates disabled in development build"
   //     : "Launcher update status idle";
 
-  const installedModNames = useMemo(
-    () => new Set(installedMods.map((mod) => normalizeModName(mod.name))),
+  const activeInstalledModNames = useMemo(
+    () =>
+      new Set(
+        installedMods
+          .filter((mod) => !mod.disabled)
+          .map((mod) => normalizeModName(mod.name))
+      ),
     [installedMods]
   );
 
@@ -309,11 +331,11 @@ export default function App() {
     return serverMods.reduce((count, mod) => {
       const normalizedName = normalizeModName(mod.name);
       return !normalizedName.startsWith("local") &&
-        installedModNames.has(normalizedName)
+        activeInstalledModNames.has(normalizedName)
         ? count + 1
         : count;
     }, 0);
-  }, [installedModNames, serverMods]);
+  }, [activeInstalledModNames, serverMods]);
 
   const installedOptionalModsCount = useMemo(() => {
     if (serverMods.length === 0 || installedMods.length === 0) {
@@ -323,11 +345,28 @@ export default function App() {
     return serverMods.reduce((count, mod) => {
       const normalizedName = normalizeModName(mod.name);
       return normalizedName.startsWith("local") &&
-        installedModNames.has(normalizedName)
+        activeInstalledModNames.has(normalizedName)
         ? count + 1
         : count;
     }, 0);
-  }, [installedModNames, serverMods]);
+  }, [activeInstalledModNames, serverMods]);
+
+  const extraInstalledModsCount = useMemo(
+    () =>
+      installedMods.filter((mod) => {
+        if (mod.disabled) {
+          return false;
+        }
+
+        return !serverModNames.has(normalizeModName(mod.name));
+      }).length,
+    [installedMods, serverModNames]
+  );
+
+  const disabledModsCount = useMemo(
+    () => installedMods.filter((mod) => mod.disabled).length,
+    [installedMods]
+  );
 
   const selectedProfileHasServerIp =
     !!selectedProfile && !isLoadingProfileServerIp && profileHasServerIp;
@@ -363,6 +402,15 @@ export default function App() {
     !dir ||
     !selectedProfileId ||
     isServerInfoUnavailable;
+  const areModActionsDisabled =
+    isInstalling || isLaunchingGame || !dir || !selectedProfileId;
+  const extraModNames = useMemo(
+    () =>
+      installedMods
+        .filter((mod) => !serverModNames.has(normalizeModName(mod.name)))
+        .map((mod) => mod.name),
+    [installedMods, serverModNames]
+  );
 
   const installedModListItems = useMemo<ModListItem[]>(
     () =>
@@ -371,16 +419,59 @@ export default function App() {
         const tags: ModTag[] = serverModNames.has(normalizedName)
           ? getModTags(mod.name)
           : ["extra"];
+        const actions: ModListAction[] = [];
+
+        if (mod.disabled) {
+          tags.push("disabled");
+          actions.push({
+            key: "enable",
+            label: "Enable",
+            onClick: () => void handleEnableMod(mod.name),
+            disabled: areModActionsDisabled,
+          });
+          actions.push({
+            key: "remove",
+            label: "Remove",
+            tone: "danger",
+            onClick: () => void handleRemoveMod(mod.name),
+            disabled: areModActionsDisabled,
+          });
+        } else {
+          if (tags.includes("extra")) {
+            actions.push({
+              key: "disable",
+              label: "Disable",
+              onClick: () => void handleDisableMod(mod.name),
+              disabled: areModActionsDisabled,
+            });
+          }
+
+          actions.push({
+            key: "remove",
+            label: "Remove",
+            tone: "danger",
+            onClick: () => void handleRemoveMod(mod.name),
+            disabled: areModActionsDisabled,
+          });
+        }
 
         return {
           key: `${mod.name}-${mod.modified}`,
           name: mod.name,
           tags,
-          status: tags.includes("extra") ? undefined : "installed",
-          subtitle: new Date(mod.modified).toLocaleString(),
+          status:
+            tags.includes("extra") || mod.disabled ? undefined : "installed",
+          actions,
         };
       }),
-    [installedMods, serverModNames]
+    [
+      areModActionsDisabled,
+      handleDisableMod,
+      handleEnableMod,
+      handleRemoveMod,
+      installedMods,
+      serverModNames,
+    ]
   );
 
   const serverModListItems = useMemo<ModListItem[]>(
@@ -389,12 +480,30 @@ export default function App() {
         key: mod.id,
         name: mod.name,
         tags: getModTags(mod.name),
-        status: installedModNames.has(normalizeModName(mod.name))
+        status: activeInstalledModNames.has(normalizeModName(mod.name))
           ? "installed"
           : "missing",
       })),
-    [installedModNames, serverMods]
+    [activeInstalledModNames, serverMods]
   );
+
+  const filteredInstalledModListItems = useMemo(() => {
+    if (installedModFilter === "all") {
+      return installedModListItems;
+    }
+
+    return installedModListItems.filter((item) => {
+      if (installedModFilter === "active") {
+        return !item.tags.includes("disabled");
+      }
+
+      if (installedModFilter === "disabled") {
+        return item.tags.includes("disabled");
+      }
+
+      return item.tags.includes(installedModFilter as ModTag);
+    });
+  }, [installedModFilter, installedModListItems]);
 
   useEffect(() => {
     if (!mc) {
@@ -626,6 +735,16 @@ export default function App() {
     }
   }
 
+  async function reloadInstalledMods(profileId = selectedProfileId) {
+    if (!dir || !profileId) {
+      setInstalledMods([]);
+      return;
+    }
+
+    const mods = await window.mc.getInstalledMods(dir, profileId);
+    setInstalledMods(mods);
+  }
+
   async function handleCleanInstall() {
     try {
       setError("");
@@ -742,11 +861,7 @@ export default function App() {
       });
 
       if (!isProfileUpToDate) {
-        await window.mc.updateSelectedProfile(
-          dir,
-          selectedProfileId,
-          removeUnusedMods
-        );
+        await window.mc.updateSelectedProfile(dir, selectedProfileId, false);
         await reloadProfiles();
       }
 
@@ -772,6 +887,85 @@ export default function App() {
       });
     } finally {
       setIsInstalling(false);
+    }
+  }
+
+  async function handleDisableMod(modName: string) {
+    if (!dir || !selectedProfileId) {
+      return;
+    }
+
+    try {
+      setError("");
+      await window.mc.disableProfileMod(dir, selectedProfileId, modName);
+      await reloadInstalledMods();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to disable mod.");
+    }
+  }
+
+  async function handleEnableMod(modName: string) {
+    if (!dir || !selectedProfileId) {
+      return;
+    }
+
+    try {
+      setError("");
+      await window.mc.enableProfileMod(dir, selectedProfileId, modName);
+      await reloadInstalledMods();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to enable mod.");
+    }
+  }
+
+  async function handleRemoveMod(modName: string) {
+    if (!dir || !selectedProfileId) {
+      return;
+    }
+
+    const shouldRemove = window.confirm(
+      `Remove ${modName} from this profile? This deletes the file from the active or disabled mod storage for the selected profile.`
+    );
+
+    if (!shouldRemove) {
+      return;
+    }
+
+    try {
+      setError("");
+      await window.mc.removeProfileMod(dir, selectedProfileId, modName);
+      await reloadInstalledMods();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to remove mod.");
+    }
+  }
+
+  async function handleRemoveAllExtraMods() {
+    if (!dir || !selectedProfileId || extraModNames.length === 0) {
+      return;
+    }
+
+    const uniqueExtraModNames = [...new Set(extraModNames)];
+    const shouldRemove = window.confirm(
+      `Remove all ${uniqueExtraModNames.length} extra mods from this profile? This will delete active and disabled extra mod files that are not part of the server mod list.`
+    );
+
+    if (!shouldRemove) {
+      return;
+    }
+
+    try {
+      setError("");
+      await Promise.all(
+        uniqueExtraModNames.map((modName) =>
+          window.mc.removeProfileMod(dir, selectedProfileId, modName)
+        )
+      );
+      await reloadInstalledMods();
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to remove extra mods."
+      );
     }
   }
 
@@ -1049,20 +1243,60 @@ export default function App() {
                   )}
                 </span>
               </div>
+              <div className="flex ac">
+                <div className="field-label mr-2">
+                  <span>Extra Mods:</span>
+                </div>
+                <span>
+                  {extraInstalledModsCount} <strong className="mods-counter-sep">|</strong>{" "}
+                  <span>Disabled Mods:</span> {disabledModsCount}
+                </span>
+              </div>
+              {extraInstalledModsCount > 0 ? (
+                <div className="mods-warning">
+                  You currently have extra mods installed. If the game crashes,
+                  try removing some or all of those.
+                </div>
+              ) : null}
             </div>
             <div className="field-block">
               {isLoadingInstalledMods ? (
                 <span>Checking installed mods...</span>
               ) : (
                 <div className="mods-summary">
+                  <div className="mods-toolbar">
+                    <select
+                      className="select-input mods-filter-select"
+                      value={installedModFilter}
+                      onChange={(e) =>
+                        setInstalledModFilter(
+                          e.target.value as (typeof modFilterOptions)[number]["value"]
+                        )
+                      }
+                      disabled={areModActionsDisabled}
+                    >
+                      {modFilterOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      className="mods-bulk-remove-button"
+                      onClick={() => void handleRemoveAllExtraMods()}
+                      disabled={areModActionsDisabled || extraModNames.length === 0}
+                    >
+                      Remove all extra mods
+                    </button>
+                  </div>
                   <div className="mods-list">
-                    {installedModListItems.length === 0 ? (
+                    {filteredInstalledModListItems.length === 0 ? (
                       <div>No installed mods found.</div>
                     ) : (
-                      <ModList items={installedModListItems} />
+                      <ModList items={filteredInstalledModListItems} />
                     )}
                   </div>
-                  {/* {TODO: Add a small btn here to delete extra mods, with a popup to confirm} */}
                 </div>
               )}
             </div>
@@ -1249,15 +1483,6 @@ export default function App() {
               >
                 {isInstalling ? "Installing Forge..." : "Clean Installation"}
               </button>
-              <label className="remove-unused-toggle">
-                <input
-                  type="checkbox"
-                  checked={removeUnusedMods}
-                  onChange={(e) => setRemoveUnusedMods(e.target.checked)}
-                  disabled={areServerActionsDisabled}
-                />
-                <span>remove unused mods</span>
-              </label>
             </div>
 
             <button

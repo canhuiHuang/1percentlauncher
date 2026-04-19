@@ -51,6 +51,7 @@ type InstalledModInfo = {
   name: string;
   size: number;
   modified: string;
+  disabled?: boolean;
 };
 
 type ForgeInstallProgress = {
@@ -110,6 +111,21 @@ declare global {
         dir: string,
         profileId: string
       ) => Promise<InstalledModInfo[]>;
+      disableProfileMod: (
+        dir: string,
+        profileId: string,
+        modName: string
+      ) => Promise<void>;
+      enableProfileMod: (
+        dir: string,
+        profileId: string,
+        modName: string
+      ) => Promise<void>;
+      removeProfileMod: (
+        dir: string,
+        profileId: string,
+        modName: string
+      ) => Promise<void>;
       installForgeClean: (dir: string) => Promise<ForgeInstallResult>;
       installForgeCleanDefault: (dir: string) => Promise<ForgeInstallResult>;
       installForgeIntoProfile: (

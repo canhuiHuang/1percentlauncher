@@ -1,30 +1,74 @@
-# React + TypeScript + Vite
+<h1 align="center">1Percent Launcher</h1>
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+### This program installs and maintains the required Forge version and mods for the 1Percent Minecraft server.
 
-Currently, two official plugins are available:
+No more manual downloads or file moving.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## Setup & Usage
 
-## Expanding the ESLint configuration
+### 0 - Install [Minecraft](https://www.minecraft.net/en-us/download) if you haven’t already.
 
-If you are developing a production application, we recommend updating the configuration to enable type aware lint rules:
+### 1 - Download the Installer [here](https://github.com/canhuiHuang/1percentlauncher/releases)
 
-- Configure the top-level `parserOptions` property like this:
+<img src="download-release.png" width="540">
 
-```js
-export default {
-  // other rules...
-  parserOptions: {
-    ecmaVersion: 'latest',
-    sourceType: 'module',
-    project: ['./tsconfig.json', './tsconfig.node.json'],
-    tsconfigRootDir: __dirname,
-  },
-}
+Download the latest installer from the Releases page
+
+### 2 - Install the Program
+
+<img  src="installing1.png" width="240">
+<img src="installing2.png" width="288">
+
+Run the installer and follow the setup steps.
+
+### 3 - Open the Launcher
+
+<img src="program-execution.png" width="288">
+
+Open 1percent launcher.exe.
+
+### 4 - Install Mods
+
+<img src="installing-mods.png" width="420">
+
+Click Install Mods.
+The launcher will automatically install the correct Forge version and required mods.
+
+If you wish to use a specific profile, I recommend <u>installing in existing profile</u>.
+
+### 5 - Open Minecraft Launcher
+
+<img src="open-minecraft-launchers.png" width="420">
+
+Once installation is complete, click Open to launch the Minecraft Launcher.
+
+### 6 - Play
+
+<img src="new-profile-is-ready-to-play.png" width="420">
+
+Click Play.
+The correct profile should already be selected.
+
+### 7 - Join the Server
+
+<img src="success.png" width="420">
+
+Go to Multiplayer and join the server.
+
+## Keep your minecraft profile update for the server
+
+You can use launcher to keep your mods up to date.
+If the server updates, just press Update again.
+<img src="update.png" width="420">
+
+### If you don't want to use the release .exe, You can also run this program by
+
+1 - Install [Node.js](https://nodejs.org/en/download/current)
+
+2 - Clone repo, install dependencies, run program.
+
 ```
-
-- Replace `plugin:@typescript-eslint/recommended` to `plugin:@typescript-eslint/recommended-type-checked` or `plugin:@typescript-eslint/strict-type-checked`
-- Optionally add `plugin:@typescript-eslint/stylistic-type-checked`
-- Install [eslint-plugin-react](https://github.com/jsx-eslint/eslint-plugin-react) and add `plugin:react/recommended` & `plugin:react/jsx-runtime` to the `extends` list
+git clone https://github.com/canhuiHuang/1percentlauncher.git
+npm install
+npm run dev
+```

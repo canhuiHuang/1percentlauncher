@@ -31,7 +31,7 @@ Open 1percent launcher.exe.
 
 <img src="installing-mods.png" width="420">
 
-### Clean Installation (1st opening Minecraft in years)
+### Clean Installation (1st time opening Minecraft in years)
 
 Click Install Mods. The launcher will automatically install the correct Forge version and required mods.
 

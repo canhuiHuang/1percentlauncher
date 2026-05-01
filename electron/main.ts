@@ -104,6 +104,46 @@ type InstalledModInfo = {
   disabled?: boolean;
 };
 
+const MARYMOBS_FILE_MARKER = "marymobs";
+
+function isMaryMobsFileName(fileName: string) {
+  return fileName.toLowerCase().includes(MARYMOBS_FILE_MARKER);
+}
+
+function getServerModModifiedTime(mod: ServerModInfo) {
+  const serverModifiedTime = Date.parse(mod.serverModified);
+  const clientModifiedTime = Date.parse(mod.clientModified);
+
+  return Math.max(
+    Number.isNaN(serverModifiedTime) ? 0 : serverModifiedTime,
+    Number.isNaN(clientModifiedTime) ? 0 : clientModifiedTime
+  );
+}
+
+function getPreferredMaryMobsServerMod(serverMods: ServerModInfo[]) {
+  return serverMods
+    .filter((mod) => isMaryMobsFileName(mod.name))
+    .sort((a, b) => {
+      const modifiedDifference =
+        getServerModModifiedTime(b) - getServerModModifiedTime(a);
+
+      return modifiedDifference || a.name.localeCompare(b.name);
+    })[0];
+}
+
+function getServerModsToSync(serverMods: ServerModInfo[]) {
+  const preferredMaryMobsMod = getPreferredMaryMobsServerMod(serverMods);
+
+  if (!preferredMaryMobsMod) {
+    return serverMods;
+  }
+
+  return serverMods.filter(
+    (mod) =>
+      !isMaryMobsFileName(mod.name) || mod.name === preferredMaryMobsMod.name
+  );
+}
+
 function getMainProcessLogPath() {
   return path.join(app.getPath("userData"), "main.log");
 }
@@ -1324,13 +1364,59 @@ app.whenReady().then(() => {
     }
   }
 
+  async function removeDuplicateMaryMobsModsFromProfile(
+    modsDir: string,
+    installedMods: InstalledModInfo[],
+    preferredFileName?: string
+  ) {
+    const maryMobsMods = installedMods.filter((mod) =>
+      isMaryMobsFileName(mod.name)
+    );
+
+    if (maryMobsMods.length === 0) {
+      return installedMods;
+    }
+
+    const fallbackKeepName = [...maryMobsMods].sort((a, b) => {
+      const modifiedDifference =
+        Date.parse(b.modified) - Date.parse(a.modified);
+
+      return modifiedDifference || a.name.localeCompare(b.name);
+    })[0].name;
+    const keepName = preferredFileName ?? fallbackKeepName;
+    const removedNames = new Set<string>();
+
+    for (const mod of maryMobsMods) {
+      if (mod.name === keepName) {
+        continue;
+      }
+
+      await fs.rm(path.join(modsDir, mod.name), { force: true });
+      removedNames.add(mod.name);
+
+      sendForgeProgress({
+        stage: "installing",
+        percent: 0,
+        message: `Removed duplicate marymobs mod ${mod.name}.`,
+      });
+    }
+
+    return installedMods.filter((mod) => !removedNames.has(mod.name));
+  }
+
   async function syncServerModsIntoProfile(mcDir: string, profileId: string) {
     const modsDir = await getProfileModsDir(mcDir, profileId);
     await ensureDir(modsDir);
 
-    const installedMods = await getProfileActiveMods(mcDir, profileId);
+    const serverMods = await getServerModsFromBackend();
+    const allServerMods = getServerModsToSync(serverMods);
+    const preferredMaryMobsMod = getPreferredMaryMobsServerMod(serverMods);
+    const installedMods = await removeDuplicateMaryMobsModsFromProfile(
+      modsDir,
+      await getProfileActiveMods(mcDir, profileId),
+      preferredMaryMobsMod?.name
+    );
     const installedNames = new Set(installedMods.map((mod) => mod.name));
-    const allServerMods = await getServerModsFromBackend();
     const missingMods = allServerMods.filter(
       (mod) => !installedNames.has(mod.name)
     );

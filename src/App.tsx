@@ -37,7 +37,7 @@ const PROFILE_ICON_EMOJIS: Record<string, string> = {
   Nether_Star: "⭐",
 };
 
-const APP_VERSION = "0.0.3";
+const APP_VERSION = "0.0.4";
 
 function normalizeModName(name: string): string {
   return name.trim().toLowerCase();

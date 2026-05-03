@@ -37,7 +37,7 @@ const PROFILE_ICON_EMOJIS: Record<string, string> = {
   Nether_Star: "⭐",
 };
 
-const APP_VERSION = "0.4.2";
+const APP_VERSION = "0.4.3";
 
 function normalizeModName(name: string): string {
   return name.trim().toLowerCase();
@@ -401,6 +401,7 @@ export default function App() {
   const areServerActionsDisabled =
     isInstalling ||
     isLaunchingGame ||
+    isLoadingServerInfo ||
     !dir ||
     !selectedProfileId ||
     isServerInfoUnavailable;
@@ -1356,7 +1357,10 @@ export default function App() {
                   className="server-info-loading-spinner"
                   aria-hidden="true"
                 />
-                <span>Loading server info...</span>
+                <span>
+                  Loading server info (Unos ~10 secs, ya que el server está en
+                  un host gratuito 😔)...
+                </span>
               </div>
             ) : null}
             <h2 className="panel-title">

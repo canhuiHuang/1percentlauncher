@@ -93,7 +93,9 @@ If the server updates, just press Update again.
 git clone https://github.com/canhuiHuang/1percentlauncher.git
 ```
 
-3 - install dependencies, run program.
+3 - Ask me for the .env file :p
+
+4 - install dependencies, run program.
 
 ```bash
 git fetch

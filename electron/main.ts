@@ -24,6 +24,13 @@ import {
 import { autoUpdater } from "electron-updater";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const portableDataDir = path.join(
+  app.isPackaged ? path.dirname(process.execPath) : process.cwd(),
+  "data"
+);
+
+app.setPath("userData", portableDataDir);
+
 const runtimeEnvPath = app.isPackaged
   ? path.join(path.dirname(process.execPath), ".env")
   : path.resolve(process.cwd(), ".env");

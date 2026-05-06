@@ -38,6 +38,7 @@ const PROFILE_ICON_EMOJIS: Record<string, string> = {
 };
 
 const APP_VERSION = "0.4.3";
+const ONBOARDING_ENABLED = false;
 
 function normalizeModName(name: string): string {
   return name.trim().toLowerCase();
@@ -526,7 +527,7 @@ export default function App() {
         setDefaultMinecraftDir(dirStatus.defaultDir);
         setDefaultMinecraftDirExists(dirStatus.defaultExists);
         setHasCustomMinecraftDir(dirStatus.hasCustomDir);
-        setShowOnboarding(!config.onboardingDismissed);
+        setShowOnboarding(ONBOARDING_ENABLED && !config.onboardingDismissed);
       } catch {
         setError("Failed to load Minecraft directory.");
       }
@@ -818,7 +819,7 @@ export default function App() {
           percent: 0,
           message: "Clean installation cancelled.",
         });
-        setShowOnboarding(true);
+        setShowOnboarding(ONBOARDING_ENABLED);
         return;
       }
 
@@ -1358,8 +1359,7 @@ export default function App() {
                   aria-hidden="true"
                 />
                 <span>
-                  Loading server info (Unos ~10 secs, ya que el server está en
-                  un host gratuito 😔)...
+                  Loading server info (~10 secs, server is on free host 😔)...
                 </span>
               </div>
             ) : null}

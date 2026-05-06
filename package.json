@@ -52,6 +52,10 @@
       {
         "from": ".env",
         "to": ".env"
+      },
+      {
+        "from": "uniquemods.json",
+        "to": "uniquemods.json"
       }
     ],
     "win": {

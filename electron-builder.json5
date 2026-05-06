@@ -11,6 +11,16 @@
     "dist",
     "dist-electron"
   ],
+  "extraFiles": [
+    {
+      "from": ".env",
+      "to": ".env"
+    },
+    {
+      "from": "uniquemods.json",
+      "to": "uniquemods.json"
+    }
+  ],
   "mac": {
     "target": [
       "dmg"

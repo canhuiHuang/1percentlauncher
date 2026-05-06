@@ -111,10 +111,49 @@ type InstalledModInfo = {
   disabled?: boolean;
 };
 
-const MARYMOBS_FILE_MARKER = "marymobs";
+type UniqueModsConfig = {
+  mods?: unknown;
+};
 
-function isMaryMobsFileName(fileName: string) {
-  return fileName.toLowerCase().includes(MARYMOBS_FILE_MARKER);
+const DEFAULT_UNIQUE_MOD_MARKERS = ["marymobs"];
+
+function getRuntimeFilePath(fileName: string) {
+  return app.isPackaged
+    ? path.join(path.dirname(process.execPath), fileName)
+    : path.resolve(process.cwd(), fileName);
+}
+
+async function readUniqueModMarkers() {
+  try {
+    const raw = await fs.readFile(
+      getRuntimeFilePath("uniquemods.json"),
+      "utf-8"
+    );
+    const config = JSON.parse(raw) as UniqueModsConfig;
+
+    if (!Array.isArray(config.mods)) {
+      return DEFAULT_UNIQUE_MOD_MARKERS;
+    }
+
+    const markers = config.mods
+      .filter((entry): entry is string => typeof entry === "string")
+      .map((entry) => entry.trim().toLowerCase())
+      .filter(Boolean);
+
+    return markers.length > 0
+      ? [...new Set(markers)]
+      : DEFAULT_UNIQUE_MOD_MARKERS;
+  } catch {
+    return DEFAULT_UNIQUE_MOD_MARKERS;
+  }
+}
+
+function getUniqueModMarkerForFileName(
+  fileName: string,
+  uniqueModMarkers: string[]
+) {
+  const normalizedFileName = fileName.toLowerCase();
+  return uniqueModMarkers.find((marker) => normalizedFileName.includes(marker));
 }
 
 function getServerModModifiedTime(mod: ServerModInfo) {
@@ -127,28 +166,52 @@ function getServerModModifiedTime(mod: ServerModInfo) {
   );
 }
 
-function getPreferredMaryMobsServerMod(serverMods: ServerModInfo[]) {
-  return serverMods
-    .filter((mod) => isMaryMobsFileName(mod.name))
-    .sort((a, b) => {
-      const modifiedDifference =
-        getServerModModifiedTime(b) - getServerModModifiedTime(a);
+function getPreferredUniqueServerMods(
+  serverMods: ServerModInfo[],
+  uniqueModMarkers: string[]
+) {
+  const preferredMods = new Map<string, ServerModInfo>();
 
-      return modifiedDifference || a.name.localeCompare(b.name);
-    })[0];
+  for (const marker of uniqueModMarkers) {
+    const preferredMod = serverMods
+      .filter((mod) => getUniqueModMarkerForFileName(mod.name, [marker]))
+      .sort((a, b) => {
+        const modifiedDifference =
+          getServerModModifiedTime(b) - getServerModModifiedTime(a);
+
+        return modifiedDifference || a.name.localeCompare(b.name);
+      })[0];
+
+    if (preferredMod) {
+      preferredMods.set(marker, preferredMod);
+    }
+  }
+
+  return preferredMods;
 }
 
-function getServerModsToSync(serverMods: ServerModInfo[]) {
-  const preferredMaryMobsMod = getPreferredMaryMobsServerMod(serverMods);
+function getServerModsToSync(
+  serverMods: ServerModInfo[],
+  uniqueModMarkers: string[]
+) {
+  const preferredUniqueMods = getPreferredUniqueServerMods(
+    serverMods,
+    uniqueModMarkers
+  );
 
-  if (!preferredMaryMobsMod) {
+  if (preferredUniqueMods.size === 0) {
     return serverMods;
   }
 
-  return serverMods.filter(
-    (mod) =>
-      !isMaryMobsFileName(mod.name) || mod.name === preferredMaryMobsMod.name
-  );
+  return serverMods.filter((mod) => {
+    const marker = getUniqueModMarkerForFileName(mod.name, uniqueModMarkers);
+
+    if (!marker) {
+      return true;
+    }
+
+    return preferredUniqueMods.get(marker)?.name === mod.name;
+  });
 }
 
 function getMainProcessLogPath() {
@@ -1347,8 +1410,10 @@ app.whenReady().then(() => {
 
     const installedMods = await getProfileActiveMods(mcDir, profileId);
     const serverMods = await getServerModsFromBackend();
+    const uniqueModMarkers = await readUniqueModMarkers();
+    const serverModsToKeep = getServerModsToSync(serverMods, uniqueModMarkers);
     const allowedNames = new Set(
-      serverMods.map((mod) => mod.name.trim().toLowerCase())
+      serverModsToKeep.map((mod) => mod.name.trim().toLowerCase())
     );
 
     const extraMods = installedMods.filter(
@@ -1371,41 +1436,45 @@ app.whenReady().then(() => {
     }
   }
 
-  async function removeDuplicateMaryMobsModsFromProfile(
+  async function removeDuplicateUniqueModsFromProfile(
     modsDir: string,
     installedMods: InstalledModInfo[],
-    preferredFileName?: string
+    uniqueModMarkers: string[],
+    preferredFileNames: Map<string, string>
   ) {
-    const maryMobsMods = installedMods.filter((mod) =>
-      isMaryMobsFileName(mod.name)
-    );
-
-    if (maryMobsMods.length === 0) {
-      return installedMods;
-    }
-
-    const fallbackKeepName = [...maryMobsMods].sort((a, b) => {
-      const modifiedDifference =
-        Date.parse(b.modified) - Date.parse(a.modified);
-
-      return modifiedDifference || a.name.localeCompare(b.name);
-    })[0].name;
-    const keepName = preferredFileName ?? fallbackKeepName;
     const removedNames = new Set<string>();
 
-    for (const mod of maryMobsMods) {
-      if (mod.name === keepName) {
+    for (const marker of uniqueModMarkers) {
+      const matchingMods = installedMods.filter(
+        (mod) => getUniqueModMarkerForFileName(mod.name, [marker]) === marker
+      );
+
+      if (matchingMods.length === 0) {
         continue;
       }
 
-      await fs.rm(path.join(modsDir, mod.name), { force: true });
-      removedNames.add(mod.name);
+      const fallbackKeepName = [...matchingMods].sort((a, b) => {
+        const modifiedDifference =
+          Date.parse(b.modified) - Date.parse(a.modified);
 
-      sendForgeProgress({
-        stage: "installing",
-        percent: 0,
-        message: `Removed duplicate marymobs mod ${mod.name}.`,
-      });
+        return modifiedDifference || a.name.localeCompare(b.name);
+      })[0].name;
+      const keepName = preferredFileNames.get(marker) ?? fallbackKeepName;
+
+      for (const mod of matchingMods) {
+        if (mod.name === keepName) {
+          continue;
+        }
+
+        await fs.rm(path.join(modsDir, mod.name), { force: true });
+        removedNames.add(mod.name);
+
+        sendForgeProgress({
+          stage: "installing",
+          percent: 0,
+          message: `Removed duplicate ${marker} mod ${mod.name}.`,
+        });
+      }
     }
 
     return installedMods.filter((mod) => !removedNames.has(mod.name));
@@ -1416,12 +1485,22 @@ app.whenReady().then(() => {
     await ensureDir(modsDir);
 
     const serverMods = await getServerModsFromBackend();
-    const allServerMods = getServerModsToSync(serverMods);
-    const preferredMaryMobsMod = getPreferredMaryMobsServerMod(serverMods);
-    const installedMods = await removeDuplicateMaryMobsModsFromProfile(
+    const uniqueModMarkers = await readUniqueModMarkers();
+    const allServerMods = getServerModsToSync(serverMods, uniqueModMarkers);
+    const preferredUniqueModNames = new Map<string, string>();
+
+    for (const [marker, mod] of getPreferredUniqueServerMods(
+      serverMods,
+      uniqueModMarkers
+    )) {
+      preferredUniqueModNames.set(marker, mod.name);
+    }
+
+    const installedMods = await removeDuplicateUniqueModsFromProfile(
       modsDir,
       await getProfileActiveMods(mcDir, profileId),
-      preferredMaryMobsMod?.name
+      uniqueModMarkers,
+      preferredUniqueModNames
     );
     const installedNames = new Set(installedMods.map((mod) => mod.name));
     const missingMods = allServerMods.filter(

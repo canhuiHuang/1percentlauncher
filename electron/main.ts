@@ -473,7 +473,6 @@ async function getMinecraftDirStatus() {
     defaultDir,
     defaultExists,
     defaultValid,
-    hasCustomDir: !!savedDir,
   };
 }
 

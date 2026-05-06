@@ -21,7 +21,6 @@ type MinecraftDirStatus = {
   defaultDir: string;
   defaultExists: boolean;
   defaultValid: boolean;
-  hasCustomDir: boolean;
 };
 
 type ForgeInstallResult = {

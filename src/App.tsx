@@ -165,7 +165,6 @@ export default function App() {
     useState(false);
   const [defaultMinecraftDir, setDefaultMinecraftDir] = useState("");
   const [minecraftDirValid, setMinecraftDirValid] = useState(true);
-  const [hasCustomMinecraftDir, setHasCustomMinecraftDir] = useState(false);
   const [progress, setProgress] = useState<ForgeInstallProgress>({
     stage: "searching",
     percent: 0,
@@ -530,7 +529,6 @@ export default function App() {
         setSystemMemoryMb(totalMemoryMb);
         setDefaultMinecraftDir(dirStatus.defaultDir);
         setMinecraftDirValid(dirStatus.minecraftDirValid);
-        setHasCustomMinecraftDir(dirStatus.hasCustomDir);
         setShowOnboarding(ONBOARDING_ENABLED && !config.onboardingDismissed);
       } catch {
         setError("Failed to load Minecraft directory.");
@@ -713,7 +711,6 @@ export default function App() {
 
       setDir(selectedDir);
       setMinecraftDirValid(true);
-      setHasCustomMinecraftDir(true);
       setProfiles([]);
     } catch (err) {
       setMinecraftDirValid(false);

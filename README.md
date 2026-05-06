@@ -8,53 +8,63 @@ No more manual downloads or file moving.
 
 ## 0) Install [Minecraft](https://www.minecraft.net/en-us/download) if you haven’t already.
 
-## 1) Download the Installer [here](https://github.com/canhuiHuang/1percentlauncher/releases)
+## 1) Download the Installer or portable .zip [here](https://github.com/canhuiHuang/1percentlauncher/releases)
 
-<img src="download-release.png" width="540">
+<img src="src/assets/download-release.png" width="540">
 
-Download the latest installer from the Releases page
+Download the latest installer or portable .zip from the Releases page
 
 ## 2) Install the Program
 
-<img src="installing1.png" width="240">
-<img src="installing2.png" width="288">
+### Portable .zip
 
-Run the installer and follow the setup steps.
+If you downloaded the portable .zip, just unzip and execute 1percentlauncher.exe
 
-## 3) Open the Launcher
+<img src="src/assets/installing-portable.png" width="280">
 
-<img src="program-execution.png" width="288">
+### Installer
 
-Open 1percent launcher.exe.
+If you downloaded the installer, run the installer and follow the setup steps.
 
-## 4) Install Mods
+<img src="src/assets/installing1.png" width="240">
+<img src="src/assets/installing2.png" width="288">
+<img src="src/assets/program-execution.png" width="288">
 
-<img src="installing-mods.png" width="420">
+Open 1percent launcher.exe
 
-### Clean Installation (1st time opening Minecraft in years)
+## 3) Install Mods
 
-Click Install Mods. The launcher will automatically install the correct Forge version and required mods.
+<img src="src/assets/installing-mods-launcher.png" width="480">
 
-### If you already have a minecraft profile
+### Option A (Existing Profile)
 
-Press <u>Install in existing profile</u>, I recommend this option if you know what you're doing.
+If you already have a Minecraft Profile, select that profile to install forge & mods for that profile.
 
-## 5) Open Minecraft Launcher
+- A1: Select your existing minecraft profile
+- A2: Click on Update button
 
-<img src="open-minecraft-launchers.png" width="420">
+### Option B (New Profile)
 
-Once installation is complete, click Open to launch the Minecraft Launcher.
+Do a clean installation in a new profile
 
-## 6) Play
+- B: Click on Clean Installation button
 
-<img src="new-profile-is-ready-to-play.png" width="420">
+## 4) Ready
+
+<img src="src/assets/open-minecraft-launchers.png" width="420">
+
+Once installation is complete, you can click on the Open button to launch the official Minecraft Launcher with the corresponding profile.
+
+## 5) Play
+
+<img src="src/assets/new-profile-is-ready-to-play.png" width="420">
 
 Click Play.
 The correct profile should already be selected.
 
-## 7) Join the Server
+## 6) Join the Server
 
-<img src="success.png" width="420">
+<img src="src/assets/success.png" width="420">
 
 Go to Multiplayer and join the server.
 
@@ -65,7 +75,7 @@ Go to Multiplayer and join the server.
 
 You can use launcher to keep your mods up to date.
 If the server updates, just press Update again.
-<img src="update.png" width="420">
+<img src="src/assets/update.png" width="420">
 
 ## If you don't want to use the release .exe, you can also run this program by
 
@@ -75,6 +85,8 @@ If the server updates, just press Update again.
 
 ```bash
 git clone https://github.com/canhuiHuang/1percentlauncher.git
+git fetch
+git pull
 npm install
 npm run dev
 ```

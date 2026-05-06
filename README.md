@@ -35,7 +35,7 @@ Open 1percent launcher.exe
 ### From source code
 
 If you want, you can clone this repo and run the program yourself.
-[See more](##Open-source.-How-to-run-the-project)
+[See more](#open-source-how-to-run-the-project)
 
 ## 3) Install Mods
 

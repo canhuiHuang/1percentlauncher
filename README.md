@@ -32,6 +32,11 @@ If you downloaded the installer, run the installer and follow the setup steps.
 
 Open 1percent launcher.exe
 
+### From source code
+
+If you want, you can clone this repo and run the program yourself.
+[See more](#If-you-don't-want-to-use-the-release-.exe,-you-can-also-run-this-program-by)
+
 ## 3) Install Mods
 
 <img src="src/assets/installing-mods-launcher.png" width="480">
@@ -75,16 +80,22 @@ Go to Multiplayer and join the server.
 
 You can use launcher to keep your mods up to date.
 If the server updates, just press Update again.
+
 <img src="src/assets/update.png" width="420">
 
 ## If you don't want to use the release .exe, you can also run this program by
 
 1 - Install [Node.js](https://nodejs.org/en/download/current)
 
-2 - Clone repo, install dependencies, run program.
+2 - Clone repo
 
 ```bash
 git clone https://github.com/canhuiHuang/1percentlauncher.git
+```
+
+3 - install dependencies, run program.
+
+```bash
 git fetch
 git pull
 npm install

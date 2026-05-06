@@ -35,7 +35,7 @@ Open 1percent launcher.exe
 ### From source code
 
 If you want, you can clone this repo and run the program yourself.
-[See more](#If-you-don't-want-to-use-the-release-.exe,-you-can-also-run-this-program-by)
+[See more](##Open-source.-How-to-run-the-project)
 
 ## 3) Install Mods
 
@@ -83,7 +83,7 @@ If the server updates, just press Update again.
 
 <img src="src/assets/update.png" width="420">
 
-## If you don't want to use the release .exe, you can also run this program by
+## Open source. How to run the project
 
 1 - Install [Node.js](https://nodejs.org/en/download/current)
 

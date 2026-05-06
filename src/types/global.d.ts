@@ -17,8 +17,10 @@ type AppConfig = {
 
 type MinecraftDirStatus = {
   minecraftDir: string;
+  minecraftDirValid: boolean;
   defaultDir: string;
   defaultExists: boolean;
+  defaultValid: boolean;
   hasCustomDir: boolean;
 };
 
@@ -85,6 +87,7 @@ declare global {
       dismissOnboarding: () => Promise<AppConfig>;
       getSavedMinecraftDir: () => Promise<string>;
       getMinecraftDirStatus: () => Promise<MinecraftDirStatus>;
+      openMinecraftDownload: () => Promise<void>;
       setWindowContentSize: (width: number, height: number) => Promise<void>;
       minimizeWindow: () => Promise<void>;
       closeWindow: () => Promise<void>;

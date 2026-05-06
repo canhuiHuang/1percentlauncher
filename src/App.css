@@ -72,8 +72,17 @@ body {
 
 .onboarding-copy {
   margin: 0 0 4px;
-  color: #5d554c;
+  color: #f3e6d5;
   line-height: 1.45;
+  text-align: center;
+}
+
+.onboarding-error {
+  width: 100%;
+  margin: 0 0 4px;
+  color: #ffd7d7;
+  font-size: 12px;
+  line-height: 1.35;
   text-align: center;
 }
 

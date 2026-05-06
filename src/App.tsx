@@ -164,8 +164,7 @@ export default function App() {
   const [onboardingRemoveUnusedMods, setOnboardingRemoveUnusedMods] =
     useState(false);
   const [defaultMinecraftDir, setDefaultMinecraftDir] = useState("");
-  const [defaultMinecraftDirExists, setDefaultMinecraftDirExists] =
-    useState(true);
+  const [minecraftDirValid, setMinecraftDirValid] = useState(true);
   const [hasCustomMinecraftDir, setHasCustomMinecraftDir] = useState(false);
   const [progress, setProgress] = useState<ForgeInstallProgress>({
     stage: "searching",
@@ -392,8 +391,8 @@ export default function App() {
     !isLoadingRequiredForgeVersion &&
     !isLoadingServerMods &&
     !requiredForgeVersionId;
-  const isOnboardingMinecraftDirMissing =
-    showOnboarding && !defaultMinecraftDirExists && !hasCustomMinecraftDir;
+  const isMinecraftDirMissing = !minecraftDirValid;
+  const shouldShowSetupModal = showOnboarding || isMinecraftDirMissing;
   const selectedProfileIcon = selectedProfile?.icon
     ? PROFILE_ICON_EMOJIS[selectedProfile.icon] ?? "🎮"
     : "🎮";
@@ -403,11 +402,16 @@ export default function App() {
     isInstalling ||
     isLaunchingGame ||
     isLoadingServerInfo ||
+    !minecraftDirValid ||
     !dir ||
     !selectedProfileId ||
     isServerInfoUnavailable;
   const areModActionsDisabled =
-    isInstalling || isLaunchingGame || !dir || !selectedProfileId;
+    isInstalling ||
+    isLaunchingGame ||
+    !minecraftDirValid ||
+    !dir ||
+    !selectedProfileId;
   const extraModNames = useMemo(
     () =>
       installedMods
@@ -525,7 +529,7 @@ export default function App() {
         setDir(dirStatus.minecraftDir);
         setSystemMemoryMb(totalMemoryMb);
         setDefaultMinecraftDir(dirStatus.defaultDir);
-        setDefaultMinecraftDirExists(dirStatus.defaultExists);
+        setMinecraftDirValid(dirStatus.minecraftDirValid);
         setHasCustomMinecraftDir(dirStatus.hasCustomDir);
         setShowOnboarding(ONBOARDING_ENABLED && !config.onboardingDismissed);
       } catch {
@@ -580,7 +584,7 @@ export default function App() {
   }, [mc]);
 
   useEffect(() => {
-    if (!mc || !dir) return;
+    if (!mc || !dir || !minecraftDirValid) return;
 
     async function loadProfiles() {
       try {
@@ -600,7 +604,7 @@ export default function App() {
     }
 
     void loadProfiles();
-  }, [dir, mc]);
+  }, [dir, mc, minecraftDirValid]);
 
   useEffect(() => {
     if (copyServerIpLabel === "COPY") {
@@ -708,11 +712,24 @@ export default function App() {
       if (!selectedDir) return;
 
       setDir(selectedDir);
+      setMinecraftDirValid(true);
       setHasCustomMinecraftDir(true);
-      setDefaultMinecraftDirExists(true);
       setProfiles([]);
+    } catch (err) {
+      setMinecraftDirValid(false);
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Failed to select Minecraft directory."
+      );
+    }
+  }
+
+  async function openMinecraftDownload() {
+    try {
+      await window.mc.openMinecraftDownload();
     } catch {
-      setError("Failed to select Minecraft directory.");
+      setError("Failed to open Minecraft download page.");
     }
   }
 
@@ -1098,16 +1115,18 @@ export default function App() {
           </button>
         </div>
       </div>
-      {showOnboarding ? (
+      {shouldShowSetupModal ? (
         <div className="onboarding-overlay">
           <div className="onboarding-modal">
             <h3 className="onboarding-title">1Percent Launcher</h3>
-            {isOnboardingMinecraftDirMissing ? (
+            {isMinecraftDirMissing ? (
               <>
                 <p className="onboarding-copy">
-                  Minecraft default directory was not found. Install Minecraft
-                  first, or choose your Minecraft directory to continue.
+                  Minecraft was not found at a valid directory. Install
+                  Minecraft first, or choose the folder that contains your
+                  minecraft installation.
                 </p>
+                {error ? <p className="onboarding-error">{error}</p> : null}
                 <button
                   className="onboarding-install-button"
                   onClick={() => void chooseFolder()}
@@ -1119,6 +1138,13 @@ export default function App() {
                   Install Minecraft first if you do not have a valid directory
                   yet.
                 </p>
+                <button
+                  className="onboarding-existing-button"
+                  onClick={() => void openMinecraftDownload()}
+                  disabled={isInstalling}
+                >
+                  Download Minecraft
+                </button>
               </>
             ) : (
               <>

@@ -7,7 +7,10 @@ import { createWriteStream } from "node:fs";
 import { spawn } from "node:child_process";
 import { gunzipSync } from "node:zlib";
 import dotenv from "dotenv";
-import { getDefaultMinecraftDir } from "./services/minecraftPaths";
+import {
+  getDefaultMinecraftDir,
+  getLauncherProfilesPath,
+} from "./services/minecraftPaths";
 import {
   readProfiles,
   createProfileForVersion,
@@ -451,16 +454,25 @@ async function ensureRuntimeDirectories() {
   await Promise.all([ensureDir(getDownloadsDir()), ensureDir(getTempDir())]);
 }
 
+async function isValidMinecraftDir(mcDir: string) {
+  return pathExists(getLauncherProfilesPath(mcDir));
+}
+
 async function getMinecraftDirStatus() {
   const config = await readConfig();
   const defaultDir = getDefaultMinecraftDir();
   const defaultExists = await pathExists(defaultDir);
+  const defaultValid = await isValidMinecraftDir(defaultDir);
   const savedDir = config.minecraftDir?.trim();
+  const minecraftDir = savedDir || defaultDir;
+  const minecraftDirValid = await isValidMinecraftDir(minecraftDir);
 
   return {
-    minecraftDir: savedDir || defaultDir,
+    minecraftDir,
+    minecraftDirValid,
     defaultDir,
     defaultExists,
+    defaultValid,
     hasCustomDir: !!savedDir,
   };
 }
@@ -965,6 +977,10 @@ app.whenReady().then(() => {
     return getMinecraftDirStatus();
   });
 
+  ipcMain.handle("mc:openMinecraftDownload", async () => {
+    await shell.openExternal("https://www.minecraft.net/download");
+  });
+
   ipcMain.handle("mc:dismissOnboarding", async () => {
     return setOnboardingDismissed();
   });
@@ -1015,6 +1031,13 @@ app.whenReady().then(() => {
     }
 
     const selectedDir = result.filePaths[0];
+
+    if (!(await isValidMinecraftDir(selectedDir))) {
+      throw new Error(
+        "Selected folder is not a valid Minecraft directory. Choose the folder that contains launcher_profiles.json."
+      );
+    }
+
     await setMinecraftDir(selectedDir);
 
     return selectedDir;

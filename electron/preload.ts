@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld("mc", {
   dismissOnboarding: () => ipcRenderer.invoke("mc:dismissOnboarding"),
   getSavedMinecraftDir: () => ipcRenderer.invoke("mc:getSavedMinecraftDir"),
   getMinecraftDirStatus: () => ipcRenderer.invoke("mc:getMinecraftDirStatus"),
+  openMinecraftDownload: () => ipcRenderer.invoke("mc:openMinecraftDownload"),
   setWindowContentSize: (width: number, height: number) =>
     ipcRenderer.invoke("mc:setWindowContentSize", width, height),
   minimizeWindow: () => ipcRenderer.invoke("mc:minimizeWindow"),
